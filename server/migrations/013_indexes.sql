@@ -1,0 +1,12 @@
+CREATE INDEX idx_users_mobile            ON users(mobile);
+CREATE INDEX idx_attribution_user_status ON attribution_sessions(user_id, status);
+CREATE INDEX idx_attribution_payment     ON attribution_sessions(payment_intent_id);
+CREATE INDEX idx_attribution_expires     ON attribution_sessions(expires_at) WHERE status = 'open';
+CREATE INDEX idx_cashback_user_created   ON cashback_transactions(user_id, created_at DESC);
+CREATE INDEX idx_cashback_status         ON cashback_transactions(status);
+CREATE INDEX idx_campaigns_status_dates  ON campaigns(status, starts_at, ends_at);
+CREATE INDEX idx_campaigns_advertiser    ON campaigns(advertiser_id);
+CREATE INDEX idx_reviews_campaign        ON ad_reviews(campaign_id, created_at DESC);
+CREATE INDEX idx_audit_entity            ON audit_log(entity_type, entity_id, created_at DESC);
+CREATE INDEX idx_profile_categories      ON purchase_profiles USING GIN(categories);
+CREATE INDEX idx_campaign_target         ON campaigns USING GIN(target_profile);
