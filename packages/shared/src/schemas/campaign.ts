@@ -6,6 +6,8 @@ export const targetProfileSchema = z.object({
   subcategories: z.array(z.string()).optional(),
 });
 
+export type TargetProfileInput = z.infer<typeof targetProfileSchema>;
+
 export const createCampaignSchema = z.object({
   name: z.string().min(3).max(255),
   description: z.string().max(1000).optional(),
