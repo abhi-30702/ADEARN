@@ -6,7 +6,7 @@ export const poolConfigSchema = z.object({
   parent_pct: z.number().int().min(0).max(100),
   charity_pct: z.number().int().min(0).max(100),
   savings_goal: z.string().min(1).optional(),
-  savings_target: z.number().positive().optional(),
+  savings_target: z.number().min(1).optional(),
   parent_account: z.object({
     ifsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Invalid IFSC code'),
     account_number: z.string().min(9).max(18),

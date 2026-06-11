@@ -6,7 +6,7 @@ export const requestOtpSchema = z.object({
 
 export const verifyOtpSchema = z.object({
   mobile: z.string().regex(/^[6-9]\d{9}$/, 'Invalid Indian mobile number'),
-  otp: z.string().length(6).regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
 });
 
 export const refreshTokenSchema = z.object({
