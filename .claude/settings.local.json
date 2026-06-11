@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(Get-ChildItem D:SHIVANI_ADEARN *)",
+      "Bash(git -C D:/SHIVANI_ADEARN log --oneline -5)",
+      "Bash(git -C D:/SHIVANI_ADEARN status --short)",
+      "Bash(npx tsc *)",
+      "Bash(git -C \"D:\\\\SHIVANI_ADEARN\" add packages/shared/src/schemas/poolConfig.ts packages/shared/src/schemas/campaign.ts)",
+      "Bash(git -C 'D:\\\\SHIVANI_ADEARN' commit -m ' *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(dir D:SHIVANI_ADEARNserver *)",
+      "PowerShell($items = [System.IO.Directory]::GetFiles\\(\"D:\\\\SHIVANI_ADEARN\\\\node_modules\\\\stripe\"\\); $items[0..10])",
+      "PowerShell($dirs = [System.IO.Directory]::GetDirectories\\(\"D:\\\\SHIVANI_ADEARN\\\\node_modules\\\\stripe\"\\); $dirs)",
+      "PowerShell($files = [System.IO.Directory]::GetFiles\\(\"D:\\\\SHIVANI_ADEARN\\\\node_modules\\\\stripe\\\\types\"\\); $files[0..10])",
+      "PowerShell($files = [System.IO.Directory]::GetFiles\\(\"D:\\\\SHIVANI_ADEARN\\\\node_modules\\\\stripe\\\\types\"\\); $files | Where-Object { $_ -match \"index\" })",
+      "PowerShell(New-Item *)",
+      "PowerShell($files = [System.IO.Directory]::GetFiles\\(\"D:\\\\SHIVANI_ADEARN\\\\server\\\\src\\\\config\"\\); $files)",
+      "Bash(dir D:SHIVANI_ADEARNserversrc *)",
+      "Bash(git *)"
+    ]
+  }
+}

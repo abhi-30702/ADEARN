@@ -61,13 +61,13 @@ router.delete(
   authenticate,
   (async (req, res, next) => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing Authorization header' } });
+      if (!req.user) {
+        res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } });
         return;
       }
+      const authHeader = req.headers.authorization!;
       const token = authHeader.slice(7);
-      await authService.logout(req.user!.sub, token);
+      await authService.logout(req.user.sub, token);
       res.json({ success: true, data: { message: 'Logged out' } });
     } catch (err) {
       next(err);
