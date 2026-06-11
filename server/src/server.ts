@@ -1,0 +1,37 @@
+import { createApp } from './app';
+import { env } from './config/env';
+import { logger } from './config/logger';
+import { db } from './config/db';
+import { redis } from './config/redis';
+
+async function start(): Promise<void> {
+  const app = createApp();
+
+  // Redis uses lazyConnect: true — must be explicitly connected before the server
+  // begins accepting requests so rate limiters and idempotency checks are available.
+  await redis.connect();
+
+  const server = app.listen(env.PORT, () => {
+    logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Server started');
+  });
+
+  const shutdown = async (signal: string): Promise<void> => {
+    logger.info({ signal }, 'Shutting down...');
+    server.close(async () => {
+      await db.end();
+      await redis.quit();
+      logger.info('Server shut down cleanly');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+}
+
+// console.error is intentional here — logger may not yet be initialised if env
+// validation or Redis connection fails before pino is ready.
+start().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});
