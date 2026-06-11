@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.routes';
 import profileRoutes from './routes/profile.routes';
 import poolConfigRoutes from './routes/poolConfig.routes';
 import feedRoutes from './routes/feed.routes';
+import campaignRoutes from './routes/campaign.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -60,6 +61,7 @@ export function createApp(): Application {
   app.use('/api/v1/profile', profileRoutes);
   app.use('/api/v1/pool-config', poolConfigRoutes);
   app.use('/api/v1/feed', feedRoutes);
+  app.use('/api/v1/advertiser/campaigns', campaignRoutes);
 
   // Error handler — MUST be last middleware registered
   app.use(errorHandler);
