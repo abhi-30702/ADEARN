@@ -316,22 +316,22 @@ docker-compose down -v               # full reset
 Update checkboxes as tasks complete. Start every session: "Read CLAUDE.md. Phase: X, Task: Y."
 
 ### Phase 1 — Foundation (Week 1–4)
-- [ ] Monorepo scaffold: workspaces, turbo.json, docker-compose, tsconfigs, .gitignore
-- [ ] `packages/shared` — types + zod schemas
-- [ ] PostgreSQL migrations 001–013
-- [ ] Demo seed + test seed
-- [ ] `config/` — env (zod), db, redis, stripe, logger
-- [ ] `lib/` — AppError, idempotency, otpService, IPaymentProvider, StripeProvider
-- [ ] Middleware — authenticate, authorize, validate, rateLimiter, requestLogger, errorHandler
-- [ ] Auth routes + service (OTP mock + JWT RS256)
-- [ ] Purchase profile API
-- [ ] Pool config API (sum validation at DB + zod)
-- [ ] Ad feed endpoint (JSONB intent-matching)
-- [ ] Campaign CRUD API
-- [ ] Advertiser onboarding + pledge signing
-- [ ] React consumer onboarding wizard
-- [ ] React advertiser portal skeleton
-- [ ] GET /health + CI GitHub Actions workflow
+- [x] Monorepo scaffold: workspaces, turbo.json, docker-compose, tsconfigs, .gitignore
+- [x] `packages/shared` — types + zod schemas
+- [x] PostgreSQL migrations 001–013
+- [x] Demo seed + test seed
+- [x] `config/` — env (zod), db, redis, stripe, logger
+- [x] `lib/` — AppError, idempotency, otpService, IPaymentProvider, StripeProvider
+- [x] Middleware — authenticate, authorize, validate, rateLimiter, requestLogger, errorHandler
+- [x] Auth routes + service (OTP mock + JWT RS256)
+- [x] Purchase profile API
+- [x] Pool config API (sum validation at DB + zod)
+- [x] Ad feed endpoint (JSONB intent-matching)
+- [x] Campaign CRUD API
+- [x] Advertiser onboarding + pledge signing
+- [x] React consumer onboarding wizard
+- [x] React advertiser portal skeleton
+- [x] GET /health + CI GitHub Actions workflow
 
 ### Phase 2 — Cashback Core (Week 5–8)
 - [ ] Attribution session management (create, lock, expire, convert)
