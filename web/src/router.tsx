@@ -2,6 +2,8 @@ import { createRouter, createRoute, createRootRoute, Outlet } from '@tanstack/re
 import { LoginPage } from './pages/consumer/LoginPage';
 import { OnboardingPage } from './pages/consumer/OnboardingPage';
 import { FeedPage } from './pages/consumer/FeedPage';
+import { AdvertiserDashboardPage } from './pages/advertiser/AdvertiserDashboardPage';
+import { CampaignCreatePage } from './pages/advertiser/CampaignCreatePage';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -34,7 +36,22 @@ const indexRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, loginRoute, onboardingRoute, feedRoute]);
+const advertiserRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/advertiser',
+  component: AdvertiserDashboardPage,
+});
+
+const campaignCreateRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/advertiser/campaigns/new',
+  component: CampaignCreatePage,
+});
+
+const routeTree = rootRoute.addChildren([
+  indexRoute, loginRoute, onboardingRoute, feedRoute,
+  advertiserRoute, campaignCreateRoute,
+]);
 
 export const router = createRouter({ routeTree });
 
