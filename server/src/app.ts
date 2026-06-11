@@ -5,6 +5,7 @@ import { requestLogger } from './middleware/requestLogger';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
 import { env } from './config/env';
+import authRoutes from './routes/auth.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -52,7 +53,7 @@ export function createApp(): Application {
   });
 
   // STEP 3: API routes — wired incrementally as tasks complete
-  // app.use('/api/v1', apiRoutes);  // wired in Phase 1 tasks
+  app.use('/api/v1/auth', authRoutes);
 
   // Error handler — MUST be last middleware registered
   app.use(errorHandler);
