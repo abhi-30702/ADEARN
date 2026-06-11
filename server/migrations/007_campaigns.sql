@@ -15,7 +15,7 @@ CREATE TABLE campaigns (
                    CHECK (status IN ('draft','pending_review','active','paused','completed','suspended')),
   rejection_reason TEXT,
   approved_at      TIMESTAMPTZ,
-  approved_by      UUID REFERENCES users(id),
+  approved_by      UUID REFERENCES users(id) ON DELETE RESTRICT,
   starts_at        TIMESTAMPTZ,
   ends_at          TIMESTAMPTZ,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),

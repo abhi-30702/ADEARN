@@ -1,7 +1,7 @@
 CREATE TABLE cashback_transactions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  attribution_id  UUID NOT NULL REFERENCES attribution_sessions(id),
+  attribution_id  UUID NOT NULL REFERENCES attribution_sessions(id) ON DELETE RESTRICT,
   purchase_amount DECIMAL(12,2) NOT NULL CHECK (purchase_amount > 0),
   cashback_amount DECIMAL(12,2) NOT NULL CHECK (cashback_amount > 0),
   liquid_amount   DECIMAL(12,2) NOT NULL CHECK (liquid_amount >= 0),

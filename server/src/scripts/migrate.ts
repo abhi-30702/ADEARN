@@ -51,7 +51,11 @@ async function migrate() {
 
     console.log('All migrations complete.');
   } catch (err) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // transaction may not exist or already rolled back
+    }
     console.error('Migration failed:', err);
     process.exit(1);
   } finally {

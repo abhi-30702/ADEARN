@@ -8,7 +8,7 @@ CREATE TABLE pool_configs (
   savings_goal   VARCHAR(255),
   savings_target DECIMAL(12,2),
   parent_account JSONB,
-  charity_ngo_id UUID REFERENCES ngos(id),
+  charity_ngo_id UUID REFERENCES ngos(id) ON DELETE SET NULL,
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT pool_pct_sum      CHECK (liquid_pct + savings_pct + parent_pct + charity_pct = 100),
   CONSTRAINT pool_non_negative CHECK (liquid_pct >= 0 AND savings_pct >= 0
