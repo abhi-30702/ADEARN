@@ -47,6 +47,27 @@ router.post(
   }) as RequestHandler,
 );
 
+// POST /attribution/:id/pay
+// Creates a Stripe PaymentIntent for the given attribution session.
+// Response: { success: true, data: { client_secret, payment_intent_id, publishable_key } }
+router.post(
+  '/:id/pay',
+  (async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        next(AppError.unauthorized());
+        return;
+      }
+
+      const data = await attributionService.createPaymentIntent(req.user.sub, req.params.id);
+
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
 // GET /attribution/:id
 // Response: { success: true, data: { id, status, expires_at, cashback_amount, purchase_amount, converted_at } }
 router.get(
