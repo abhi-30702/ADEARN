@@ -113,7 +113,7 @@ export const attributionService = {
     }
 
     if (session.purchase_amount === null) {
-      throw AppError.notFound('Purchase amount not set — call /attribution/start first');
+      throw AppError.conflict('Purchase amount not set — call /attribution/start first');
     }
 
     const provider = new StripeProvider();

@@ -59,7 +59,14 @@ router.post(
         return;
       }
 
-      const data = await attributionService.createPaymentIntent(req.user.sub, req.params.id);
+      const idParse = z.string().uuid().safeParse(req.params.id);
+      if (!idParse.success) {
+        res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid session ID' } });
+        return;
+      }
+      const sessionId = idParse.data;
+
+      const data = await attributionService.createPaymentIntent(req.user.sub, sessionId);
 
       res.json({ success: true, data });
     } catch (err) {
@@ -79,7 +86,14 @@ router.get(
         return;
       }
 
-      const session = await attributionService.getSession(req.user.sub, req.params.id);
+      const idParse = z.string().uuid().safeParse(req.params.id);
+      if (!idParse.success) {
+        res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid session ID' } });
+        return;
+      }
+      const sessionId = idParse.data;
+
+      const session = await attributionService.getSession(req.user.sub, sessionId);
 
       res.json({
         success: true,
