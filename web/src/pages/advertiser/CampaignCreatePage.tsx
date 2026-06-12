@@ -58,11 +58,11 @@ export function CampaignCreatePage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-peach-light">
         <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm text-center">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Campaign submitted!</h2>
           <p className="text-gray-500 text-sm mb-6">Your campaign is pending review. We&apos;ll approve it within 24 hours.</p>
-          <a href="/advertiser" className="inline-block w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 text-center">
+          <a href="/advertiser" className="inline-block w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark text-center">
             Back to Dashboard
           </a>
         </div>
@@ -71,9 +71,9 @@ export function CampaignCreatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-peach-light">
       <nav className="bg-white border-b px-6 py-3 flex items-center gap-4">
-        <a href="/advertiser" className="text-sm text-indigo-600 hover:underline">← Back</a>
+        <a href="/advertiser" className="text-sm text-aqua hover:underline">← Back</a>
         <span className="font-medium text-gray-900">New Campaign</span>
       </nav>
 
@@ -143,7 +143,7 @@ export function CampaignCreatePage() {
           {error && <p className="text-red-500 text-sm">{error}</p>}
 
           <button type="submit" disabled={form.formState.isSubmitting}
-            className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+            className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50">
             {form.formState.isSubmitting ? 'Creating...' : 'Submit Campaign'}
           </button>
         </form>

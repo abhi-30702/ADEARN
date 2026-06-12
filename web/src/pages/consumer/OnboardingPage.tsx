@@ -71,12 +71,12 @@ export function OnboardingPage() {
 
   if (step === 3) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-peach-light">
         <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm text-center">
           <div className="text-4xl mb-4">🎉</div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">You&apos;re all set!</h2>
           <p className="text-gray-500 text-sm mb-6">Start watching matched ads and earning cashback.</p>
-          <a href="/feed" className="inline-block w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 text-center">
+          <a href="/feed" className="inline-block w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark text-center">
             Go to Feed
           </a>
         </div>
@@ -85,11 +85,11 @@ export function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-peach-light">
       <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
         <div className="flex gap-2 mb-6">
           {[1, 2].map((s) => (
-            <div key={s} className={`h-1 flex-1 rounded-full ${step >= s ? 'bg-indigo-600' : 'bg-gray-200'}`} />
+            <div key={s} className={`h-1 flex-1 rounded-full ${step >= s ? 'bg-aqua' : 'bg-gray-200'}`} />
           ))}
         </div>
 
@@ -134,13 +134,13 @@ export function OnboardingPage() {
               <button
                 type="button"
                 onClick={() => append({ category: '', brands: '', spend_range: '', frequency: 'Monthly' })}
-                className="text-indigo-600 text-sm"
+                className="text-aqua text-sm"
               >
                 + Add category
               </button>
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button type="submit" disabled={profileForm.formState.isSubmitting}
-                className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50">
                 Continue
               </button>
             </form>
@@ -179,7 +179,7 @@ export function OnboardingPage() {
               )}
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button type="submit" disabled={poolForm.formState.isSubmitting}
-                className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 mt-2">
+                className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50 mt-2">
                 Save &amp; Continue
               </button>
             </form>

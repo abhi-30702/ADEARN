@@ -53,7 +53,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-peach-light">
       <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">AdEarn</h1>
         <p className="text-gray-500 text-sm mb-6">Get paid to watch ads &amp; buy products</p>
@@ -65,7 +65,7 @@ export function LoginPage() {
               <input
                 {...mobileForm.register('mobile')}
                 placeholder="9876543210"
-                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-aqua"
               />
               {mobileForm.formState.errors.mobile && (
                 <p className="text-red-500 text-xs mt-1">{mobileForm.formState.errors.mobile.message}</p>
@@ -75,7 +75,7 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={mobileForm.formState.isSubmitting}
-              className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50"
             >
               {mobileForm.formState.isSubmitting ? 'Sending...' : 'Send OTP'}
             </button>
@@ -89,7 +89,7 @@ export function LoginPage() {
                 {...otpForm.register('otp')}
                 placeholder="123456"
                 maxLength={6}
-                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-aqua"
               />
               {otpForm.formState.errors.otp && (
                 <p className="text-red-500 text-xs mt-1">{otpForm.formState.errors.otp.message}</p>
@@ -99,11 +99,11 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={otpForm.formState.isSubmitting}
-              className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50"
             >
               {otpForm.formState.isSubmitting ? 'Verifying...' : 'Verify OTP'}
             </button>
-            <button type="button" onClick={() => setStep('mobile')} className="w-full text-sm text-indigo-600 hover:underline">
+            <button type="button" onClick={() => setStep('mobile')} className="w-full text-sm text-aqua hover:underline">
               Change mobile number
             </button>
           </form>

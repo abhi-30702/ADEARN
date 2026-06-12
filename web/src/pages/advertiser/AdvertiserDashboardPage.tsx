@@ -25,9 +25,9 @@ export function AdvertiserDashboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-peach-light">
       <nav className="bg-white border-b px-6 py-3 flex items-center justify-between">
-        <span className="font-bold text-indigo-600">AdEarn for Business</span>
+        <span className="font-bold text-aqua">AdEarn for Business</span>
         <span className="text-sm text-gray-600">{user?.name}</span>
       </nav>
 
@@ -36,7 +36,7 @@ export function AdvertiserDashboardPage() {
           <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
           <a
             href="/advertiser/campaigns/new"
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+            className="bg-aqua text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark"
           >
             New Campaign
           </a>
@@ -66,7 +66,7 @@ export function AdvertiserDashboardPage() {
                   }`}>
                     {c.status.replace('_', ' ')}
                   </span>
-                  <a href={`/advertiser/campaigns/${c.id}/stats`} className="text-indigo-600 text-sm hover:underline">
+                  <a href={`/advertiser/campaigns/${c.id}/stats`} className="text-aqua text-sm hover:underline">
                     Stats
                   </a>
                 </div>

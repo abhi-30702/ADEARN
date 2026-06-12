@@ -4,9 +4,9 @@ export function FeedPage() {
   const user = useAuthStore((s) => s.user);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-peach-light">
       <nav className="bg-white border-b px-4 py-3 flex items-center justify-between">
-        <span className="font-bold text-indigo-600">AdEarn</span>
+        <span className="font-bold text-aqua">AdEarn</span>
         <span className="text-sm text-gray-600">Hi, {user?.name ?? 'User'}</span>
       </nav>
       <div className="max-w-xl mx-auto p-4">
