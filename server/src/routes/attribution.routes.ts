@@ -27,7 +27,7 @@ router.post(
 
       const parsed = startSessionSchema.safeParse(req.body);
       if (!parsed.success) {
-        const fieldErrors = parsed.error.flatten().fieldErrors as Record<string, string[]>;
+        const fieldErrors = parsed.error.flatten().fieldErrors;
         next(AppError.validation('Invalid request body', fieldErrors));
         return;
       }
@@ -66,8 +66,8 @@ router.get(
           id: session.id,
           status: session.status,
           expires_at: session.expires_at,
-          cashback_amount: session.cashback_amount,
-          purchase_amount: session.purchase_amount,
+          cashback_amount: session.cashback_amount !== null ? Number(session.cashback_amount) : null,
+          purchase_amount: session.purchase_amount !== null ? Number(session.purchase_amount) : null,
           converted_at: session.converted_at,
         },
       });

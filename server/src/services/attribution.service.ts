@@ -48,8 +48,12 @@ export const attributionService = {
 
     // 3. Calculate estimated cashback — integer arithmetic in paise, then convert back
     const cashbackRate = Number(campaign.cashback_rate);
-    const estimatedCashbackPaise = Math.round(purchaseAmount * cashbackRate * 100);
+    const purchaseAmountPaise = Math.round(purchaseAmount * 100);
+    const estimatedCashbackPaise = Math.round(purchaseAmountPaise * cashbackRate);
     const estimatedCashback = estimatedCashbackPaise / 100;
+
+    // 4. Persist the purchase amount onto the existing session row
+    await attributionRepository.updatePurchaseAmount(existingSession.id, purchaseAmount);
 
     logger.info(
       {

@@ -28,7 +28,9 @@ export const attributionRepository = {
        RETURNING *`,
       [userId, campaignId, purchaseAmount, expiresAt.toISOString()],
     );
-    return res.rows[0];
+    const row = res.rows[0];
+    if (!row) throw new Error('INSERT attribution_sessions returned no row');
+    return row;
   },
 
   /** Find a session by its primary key */
@@ -85,6 +87,14 @@ export const attributionRepository = {
     await db.query(
       `UPDATE attribution_sessions SET payment_intent_id = $1 WHERE id = $2`,
       [paymentIntentId, id],
+    );
+  },
+
+  /** Write the confirmed purchase amount onto an existing attribution session */
+  async updatePurchaseAmount(id: string, purchaseAmount: number): Promise<void> {
+    await db.query(
+      `UPDATE attribution_sessions SET purchase_amount = $2 WHERE id = $1`,
+      [id, purchaseAmount],
     );
   },
 
