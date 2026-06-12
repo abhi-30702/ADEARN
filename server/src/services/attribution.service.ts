@@ -121,7 +121,7 @@ export const attributionService = {
       amountRupees: Number(session.purchase_amount),
       currency: 'inr',
       metadata: {
-        adearn_session_id: sessionId,
+        session_id: sessionId,
         user_id: userId,
         campaign_id: session.campaign_id,
       },

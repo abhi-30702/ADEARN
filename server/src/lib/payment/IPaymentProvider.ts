@@ -2,7 +2,7 @@ export interface CreatePaymentParams {
   amountRupees: number;
   currency: 'inr';
   metadata: {
-    adearn_session_id: string;
+    session_id: string;
     user_id: string;
     campaign_id: string;
   };
