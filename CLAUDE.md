@@ -346,7 +346,7 @@ Update checkboxes as tasks complete. Start every session: "Read CLAUDE.md. Phase
 - [ ] Notification service (FCM + mock email)
 - [ ] Consumer wallet UI — balances + ledger
 - [ ] Advertiser spend tracking UI
-- [ ] Unit tests: cashbackEngine, fraudDetection, poolDistributor
+- [x] Unit tests: cashbackEngine, fraudDetection, poolDistributor
 - [ ] Integration tests: webhook (happy path + idempotency + fraud)
 
 ### Phase 3 — Community, Analytics & Ops (Week 9–12)
