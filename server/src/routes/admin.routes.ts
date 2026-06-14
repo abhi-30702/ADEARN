@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import type { RequestHandler } from 'express';
 import { disbursementRepository } from '../repositories/disbursement.repository';
+import { analyticsService } from '../services/analytics.service';
+import { authenticate } from '../middleware/authenticate';
+import { authorize } from '../middleware/authorize';
 
 const router = Router();
 
@@ -14,6 +17,131 @@ router.get(
   (async (_req, res, next) => {
     try {
       const data = await disbursementRepository.getCharityLedger();
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+// All routes below require an authenticated admin JWT.
+router.use(authenticate);
+router.use(authorize('admin'));
+
+/**
+ * GET /admin/fraud-queue
+ * List all cashback transactions currently flagged for fraud review.
+ */
+router.get(
+  '/fraud-queue',
+  (async (_req, res, next) => {
+    try {
+      const data = await analyticsService.getFraudQueue();
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+/**
+ * PUT /admin/fraud-queue/:id/approve
+ * Body: { approved: boolean }
+ * Approve (true) or reject (false) a fraud-flagged transaction.
+ */
+router.put(
+  '/fraud-queue/:id/approve',
+  (async (req, res, next) => {
+    try {
+      const txId = req.params['id'] as string;
+      const approved: boolean = Boolean(req.body.approved);
+      await analyticsService.resolveFraudCase(txId, approved);
+      res.json({ success: true, data: { id: txId, approved } });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+/**
+ * GET /admin/users
+ * Paginated list of platform users (most recent first, default limit 50).
+ */
+router.get(
+  '/users',
+  (async (_req, res, next) => {
+    try {
+      const data = await analyticsService.listUsers();
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+/**
+ * PUT /admin/users/:id/suspend
+ * Body: { suspended: boolean }
+ * Suspend (true) or reinstate (false) a user account.
+ */
+router.put(
+  '/users/:id/suspend',
+  (async (req, res, next) => {
+    try {
+      const userId = req.params['id'] as string;
+      const suspended: boolean = Boolean(req.body.suspended);
+      await analyticsService.setUserSuspended(userId, suspended);
+      res.json({ success: true, data: { id: userId, suspended } });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+/**
+ * GET /admin/advertisers
+ * List all advertisers with status='pending' awaiting approval.
+ */
+router.get(
+  '/advertisers',
+  (async (_req, res, next) => {
+    try {
+      const data = await analyticsService.listPendingAdvertisers();
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+/**
+ * PUT /admin/advertisers/:id/approve
+ * Body: { approved: boolean }
+ * Approve → status 'active', reject → status 'suspended'.
+ */
+router.put(
+  '/advertisers/:id/approve',
+  (async (req, res, next) => {
+    try {
+      const advertiserId = req.params['id'] as string;
+      const approved: boolean = Boolean(req.body.approved);
+      await analyticsService.setAdvertiserApproval(advertiserId, approved);
+      res.json({ success: true, data: { id: advertiserId, approved } });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+/**
+ * GET /admin/financials
+ * Platform-wide financial summary (total cashback paid, pool balances, active users).
+ */
+router.get(
+  '/financials',
+  (async (_req, res, next) => {
+    try {
+      const data = await analyticsService.getAdminFinancials();
       res.json({ success: true, data });
     } catch (err) {
       next(err);
