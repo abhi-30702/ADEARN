@@ -11,4 +11,7 @@ module.exports = {
     '^@adearn/shared$': '<rootDir>/../packages/shared/src/index.ts',
   },
   testTimeout: 30000,
+  // globalSetup probes DB + Redis once before any test file is loaded and sets
+  // process.env.INFRA_AVAILABLE so integration tests can decide to skip.
+  globalSetup: '<rootDir>/tests/integration/setup.ts',
 };
