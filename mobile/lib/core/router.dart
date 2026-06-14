@@ -8,6 +8,7 @@ import '../features/profile/pool_config_screen.dart';
 import '../features/feed/feed_screen.dart';
 import '../features/wallet/wallet_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/checkout/checkout_screen.dart';
 import 'auth_repository.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -37,6 +38,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/feed', builder: (ctx, _) => const FeedScreen()),
       GoRoute(path: '/wallet', builder: (ctx, _) => const WalletScreen()),
       GoRoute(path: '/profile', builder: (ctx, _) => const ProfileScreen()),
+      GoRoute(
+        path: '/checkout/:campaignId',
+        builder: (ctx, state) {
+          final id = state.pathParameters['campaignId']!;
+          return CheckoutScreen(campaignId: id);
+        },
+      ),
     ],
   );
 });
