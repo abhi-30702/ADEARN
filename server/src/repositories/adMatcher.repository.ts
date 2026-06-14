@@ -40,13 +40,14 @@ export const adMatcherRepository = {
       WHERE c.status = 'active'
         AND c.total_budget > c.spent_to_date
         AND c.ends_at > NOW()
-        AND (
-          SELECT COUNT(*)
+        AND EXISTS (
+          SELECT 1
           FROM jsonb_array_elements_text(c.target_profile->'categories') AS tc
-          WHERE tc IN (
-            SELECT jsonb_array_elements(pp.categories)->>'category'
-          )
-        ) > 0
+          JOIN LATERAL (
+            SELECT LOWER(cat->>'category') AS user_cat
+            FROM jsonb_array_elements(pp.categories) AS cat
+          ) user_cats ON LOWER(tc) = user_cats.user_cat
+        )
       ORDER BY c.cashback_rate DESC
       `,
       [userId],
@@ -60,7 +61,7 @@ export const adMatcherRepository = {
   async getCampaignCategories(campaignId: string): Promise<string[]> {
     const res = await db.query<{ category: string }>(
       `
-      SELECT jsonb_array_elements_text(target_profile->'categories') AS category
+      SELECT LOWER(jsonb_array_elements_text(target_profile->'categories')) AS category
       FROM campaigns
       WHERE id = $1
         AND status = 'active'
@@ -78,7 +79,7 @@ export const adMatcherRepository = {
     const res = await db.query<{ category: string; brands: string[] }>(
       `
       SELECT
-        cat->>'category'                                        AS category,
+        LOWER(cat->>'category')                                 AS category,
         ARRAY(SELECT jsonb_array_elements_text(cat->'brands')) AS brands
       FROM purchase_profiles,
            jsonb_array_elements(categories) AS cat

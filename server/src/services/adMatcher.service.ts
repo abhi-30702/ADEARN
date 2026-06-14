@@ -67,7 +67,7 @@ export const adMatcherService = {
 
     if (campaignCategories.length === 0 || userProfile.length === 0) {
       logger.info(
-        { userId, campaignId, campaignCategories, profileEntries: userProfile.length },
+        { userId, campaignId, profileEntries: userProfile.length },
         'adMatcher: cannot determine match — empty campaign categories or user profile',
       );
       return false;
@@ -82,7 +82,7 @@ export const adMatcherService = {
     );
 
     logger.info(
-      { userId, campaignId, matches, campaignCategories },
+      { userId, campaignId, matches },
       'adMatcher: doesCampaignMatchUser result',
     );
 
