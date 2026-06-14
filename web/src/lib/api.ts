@@ -26,3 +26,33 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Wallet API
+
+export interface PoolBalances {
+  liquid_balance: number;
+  savings_balance: number;
+  parent_balance: number;
+  charity_balance: number;
+  total_earned: number;
+}
+
+export interface WalletData {
+  pool_balances: PoolBalances;
+  withdrawal_eligible: boolean;
+}
+
+export interface CashbackTransaction {
+  id: string;
+  created_at: string;
+  campaign_name: string;
+  brand_name: string;
+  cashback_amount: number;
+  status: 'completed' | 'under_review';
+}
+
+export const getWallet = (): Promise<WalletData> =>
+  api.get('/wallet').then((r) => r.data.data);
+
+export const getTransactions = (): Promise<CashbackTransaction[]> =>
+  api.get('/transactions').then((r) => r.data.data);
