@@ -1,199 +1,249 @@
 # AdEarn
 
-**Intent-matched, purchase-triggered cashback advertising platform.**
+**Ad Revenue to Customer — Get Paid to Watch Ads and Buy Products**
 
-> *Get paid in real cashback for purchases you were already going to make.*
+AdEarn is a production-level cashback advertising platform where users declare purchase intent, see only matched ads, complete purchases, and receive 1–5% cashback automatically split into four pools. Advertisers are billed only after cashback is committed — never on impressions.
 
 ---
 
-## Architecture
+## What It Does
+
+Users declare purchase intent and are shown only ads that match their profile via JSONB overlap queries. When a purchase is confirmed via Stripe webhook, the cashback engine runs a single atomic PostgreSQL transaction that splits earnings into four pools: liquid (40%), self-savings (30%), parent fund (20%), charity (10%). Advertisers pay only on verified conversions.
+
+**Three invariants are always enforced:**
+1. Cashback distribution is always one atomic PostgreSQL transaction — partial writes are a financial bug.
+2. Advertiser billing happens only after cashback is committed — never before.
+3. Every webhook is idempotent — double-processing is architecturally impossible via Redis SETNX.
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
+|---|---|
+| Backend | Node.js 20 + Express 4 + TypeScript 5 strict |
+| Database | PostgreSQL 16 (raw `pg`, no ORM) |
+| Cache / Queue | Redis 7 via ioredis |
+| Payments | Stripe (test mode) behind `IPaymentProvider` interface |
+| Auth | JWT RS256 |
+| Frontend | React 18 + Vite + TanStack Router/Query + Tailwind CSS + shadcn/ui |
+| Mobile | Flutter 3 + Riverpod + Dio + flutter_stripe |
+| Monitoring | Sentry (server + web) |
+| CI/CD | GitHub Actions → Railway (server) + Vercel (web) |
+
+---
+
+## Monorepo Structure
 
 ```
 adearn/
-├── backend/          Node.js 20 + Express 4 API
+├── server/              Node.js API (Express)
+│   ├── src/
+│   │   ├── routes/      REST endpoints
+│   │   ├── controllers/ Thin: parse req → call service → return res
+│   │   ├── services/    Business logic (cashbackEngine, fraudDetection, adMatcher…)
+│   │   ├── repositories/ All SQL lives here — none in services
+│   │   ├── middleware/  authenticate, authorize, validate, rateLimiter, errorHandler
+│   │   └── jobs/        parentFundTransfer (1st), charityDisbursement (15th), expireAttributions
+│   └── migrations/      001–013 SQL files
+├── web/                 React 18 frontend
 │   └── src/
-│       ├── routes/           REST endpoints
-│       ├── controllers/      Request handlers
-│       ├── services/
-│       │   ├── cashbackEngine.js   ← Core business logic
-│       │   └── fraudService.js     ← Rule-based fraud scoring
-│       ├── middleware/       Auth, rate limiting, validation
-│       ├── models/           schema.sql (PostgreSQL 16)
-│       ├── config/           DB, Redis, Stripe
-│       ├── jobs/             Cron jobs (parent fund, charity, retry)
-│       └── utils/            Logger, JWT, response helpers
-├── frontend/         React 18 + Vite + Zustand
-│   └── src/
-│       ├── pages/            Consumer | Advertiser | Admin views
-│       ├── services/api.js   Axios client with JWT interceptor
-│       └── store/            Zustand auth store
-├── infra/
-│   └── docker/docker-compose.yml   PostgreSQL 16 + Redis 7
-└── scripts/setup.sh  One-command local dev setup
+│       ├── pages/       consumer/ · advertiser/ · admin/
+│       ├── components/  AdCard, VideoAdPlayer, CashbackPoolVisualizer, PoolSliders
+│       ├── hooks/       useAuth, useFeed, useWallet, useStripe
+│       └── services/    api.ts — axios instance + all API calls
+├── mobile/              Flutter consumer app
+│   └── lib/
+│       ├── core/        api_client, auth, errors
+│       └── features/    onboarding, feed, wallet, profile, checkout
+├── packages/shared/     Shared TypeScript types + zod schemas
+├── docs/                API spec + business logic + schema reference
+│   └── openapi.yaml
+├── docker-compose.yml
+└── CLAUDE.md            Full build instructions and phase tracker
 ```
 
 ---
 
-## Quick Start
+## Local Setup
 
-### Prerequisites
-
-| Tool | Version |
-|---|---|
-| Node.js | 20 LTS+ |
-| Docker Desktop | Latest |
-| Stripe CLI | Latest |
-
-### 1. Clone & setup
+**Prerequisites:** Node.js 20 LTS, Docker Desktop, Stripe CLI
 
 ```bash
-git clone <repo-url> adearn
+# 1. Clone and install
+git clone https://github.com/your-org/adearn.git
 cd adearn
-bash scripts/setup.sh
-```
+npm install
 
-The setup script installs dependencies, copies `.env` files, and starts Docker services.
+# 2. Start infrastructure
+docker-compose up -d   # PostgreSQL 16 + Redis 7
 
-### 2. Configure Stripe
+# 3. Configure server
+cp server/.env.example server/.env
+# Edit server/.env — add JWT RS256 keys and Stripe test keys
 
-Edit `backend/.env`:
+# 4. Run migrations and load demo data
+cd server && npm run migrate
+npm run seed:demo
 
-```env
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-```
+# 5. Start server (terminal 1)
+npm run dev   # http://localhost:3000
 
-Get these from [dashboard.stripe.com](https://dashboard.stripe.com) (test mode).
+# 6. Start web (terminal 2)
+cd ../web && npm run dev   # http://localhost:5173
 
-### 3. Run
-
-```bash
-# Terminal 1 — Backend API
-npm run dev:backend
-
-# Terminal 2 — Frontend
-npm run dev:frontend
-
-# Terminal 3 — Stripe webhook forwarding (dev only)
+# 7. Forward Stripe webhooks (terminal 3)
 stripe listen --forward-to localhost:3000/api/v1/webhooks/stripe
 ```
 
 | Service | URL |
 |---|---|
 | API | http://localhost:3000 |
-| Frontend | http://localhost:5173 |
 | Health check | http://localhost:3000/health |
-| Charity ledger (public) | http://localhost:5173/charity-ledger |
+| Frontend | http://localhost:5173 |
+| Public charity ledger | http://localhost:5173/charity-ledger |
 
 ---
 
-## Development Credentials
+## Demo Accounts
 
-**OTP (dev mode):** Any Indian mobile number, OTP is always `123456`.
+Seeded by `npm run seed:demo`. OTP is always `123456` in dev mode (`OTP_MOCK=true`).
 
-**Stripe test cards:**
-
-| Card | Scenario |
-|---|---|
-| `4242 4242 4242 4242` | Payment succeeds |
-| `4000 0000 0000 9995` | Payment declined |
-| `4000 0025 0000 3155` | Requires 3D Secure |
-
-Use any future expiry date and any 3-digit CVC.
+| Role | Mobile | OTP |
+|---|---|---|
+| Consumer | 9876543210 | 123456 |
+| Advertiser | 9123456789 | 123456 |
+| Admin | 9000000000 | 123456 |
 
 ---
 
-## Core Cashback Flow (end-to-end)
+## Demo Flow (11 Steps)
 
+The full end-to-end scenario using the Mamaearth Vitamin C Serum campaign (₹1,499, 3% cashback):
+
+1. Consumer login → OTP `123456`
+2. Purchase profile → Health & Beauty + Mamaearth (pre-selected by seed)
+3. Pool config → 40 / 30 / 20 / 10 split + parent bank pre-filled
+4. Feed → Mamaearth Vitamin C Serum ad card (3% badge)
+5. Tap ad → video plays → attribution session created (24h window)
+6. Stripe checkout → `4242 4242 4242 4242` / `12/34` / `123`
+7. Stripe CLI shows `payment_intent.succeeded`
+8. Server: atomic transaction committed (< 3s) — 5 writes in one `BEGIN/COMMIT`
+9. Wallet → pool balances update live via TanStack Query polling
+10. Ad review → 5/5/5 scores submitted
+11. Advertiser login → 1 conversion · ₹44.97 spend · 100% conversion rate
+
+**What this proves:** intent-matching · performance billing · atomic cashback · idempotency · production-grade engineering
+
+---
+
+## API Reference
+
+Full route table and request/response shapes: [`docs/API.md`](docs/API.md)
+
+OpenAPI 3.0 spec: [`docs/openapi.yaml`](docs/openapi.yaml)
+
+**Base URL:** `http://localhost:3000/api/v1` (dev) · `https://your-api.railway.app/api/v1` (production)
+
+**Authentication:** `Authorization: Bearer <JWT>` on all routes except `/auth/*`, `/health`, and `/public/charity-ledger`.
+
+**Response envelope:**
+```json
+{ "success": true, "data": {} }
+{ "success": false, "error": { "code": "FRAUD_REVIEW", "message": "..." } }
 ```
-1. User logs in via OTP → JWT issued
-2. GET /api/v1/feed → intent-matched ads returned
-3. User views ad → POST /api/v1/attribution/start → session created (24hr window)
-4. User completes Stripe Checkout payment
-5. Stripe fires payment_intent.succeeded webhook → POST /api/v1/webhooks/stripe
-6. Cashback engine:
-   a. Verify Stripe signature (constructEvent)
-   b. Check idempotency (Redis + DB on payment_intent_id)
-   c. Lookup attribution session
-   d. Calculate cashback (1–5% of purchase)
-   e. Run fraud scoring (6 rules, weighted)
-   f. Atomic PostgreSQL transaction:
-      - Write cashback_transactions
-      - Update wallet pool balances
-      - Update NGO accumulated balance
-      - Update campaign spend_to_date
-      - Mark session as converted
-   g. Notify user (FCM push + WhatsApp if opted in)
-7. Transaction visible at GET /api/v1/transactions
+
+---
+
+## Testing
+
+```bash
+cd server
+
+# Unit tests — no infrastructure required
+npm run test:unit
+
+# Integration tests — requires PostgreSQL + Redis
+docker-compose up -d && npm run migrate
+npm test
+
+# Coverage report
+npm run test:coverage
+```
+
+Test suites cover: cashback engine atomicity, fraud detection scoring, pool distributor integer arithmetic, ad matcher JSONB queries, webhook happy path, idempotency replay, fraud auto-flag, and wallet balance reads.
+
+---
+
+## Deployment
+
+### Backend — Railway
+
+1. Connect the GitHub repository to Railway.
+2. Railway auto-detects `railway.toml` and builds `server/Dockerfile`.
+3. Add the Railway PostgreSQL and Redis plugins — env vars are injected automatically.
+4. Set remaining secrets in the Railway dashboard (see `server/.env.example` for the full list).
+
+### Frontend — Vercel
+
+1. Import the GitHub repository into Vercel.
+2. Vercel auto-detects `web/vercel.json` and builds from the `web/` directory.
+3. Set `VITE_API_URL` to your Railway backend URL and `VITE_STRIPE_PUBLISHABLE_KEY` to your Stripe publishable key.
+
+### Load Test (k6)
+
+```bash
+# Run after deployment to verify throughput target
+BASE_URL=https://your-api.railway.app \
+STRIPE_WEBHOOK_SECRET=whsec_xxx \
+k6 run server/tests/load/webhook-flood.js
+# Target: 500 webhooks/min, p(95) < 500ms
 ```
 
 ---
 
-## Key API Endpoints
+## Mobile
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/auth/request-otp` | Send OTP to mobile |
-| POST | `/api/v1/auth/verify-otp` | Verify OTP, get JWT |
-| GET | `/api/v1/feed` | Intent-matched ad feed |
-| POST | `/api/v1/attribution/start` | Start ad-to-purchase session |
-| GET | `/api/v1/wallet` | Pool balances |
-| GET | `/api/v1/transactions` | Cashback history |
-| POST | `/api/v1/webhooks/stripe` | Stripe payment webhook |
-| GET | `/public/charity-ledger` | Public NGO disbursements |
+```bash
+# Prerequisites: Flutter 3.10+ SDK
+cd mobile
+flutter pub get
+flutter run   # Android emulator or physical device
 
----
+# Build release APK for demo
+flutter build apk --release
+```
 
-## Background Jobs
-
-| Job | Schedule | Description |
-|---|---|---|
-| Parent fund transfer | 1st of month, midnight IST | IMPS to parent bank accounts |
-| Charity disbursement | 15th of month, midnight IST | Batch to NGO accounts |
-| Webhook retry | Every minute | Retry failed webhook events |
-| Session expiry | Every hour | Expire 24hr attribution windows |
+The Flutter app covers all consumer screens: OTP onboarding, purchase profile setup, ad feed, attribution flow, Stripe checkout, wallet with pool breakdown, and transaction history.
 
 ---
 
-## Fraud Detection Rules
+## Architecture Decisions
 
-| Rule | Threshold | Score Weight |
-|---|---|---|
-| Conversion velocity | > 5/day per user | 0.30 |
-| Device fingerprint mismatch | Ad view ≠ purchase device | 0.25 |
-| Geo mismatch | Non-India IP at purchase | 1.00 (auto-reject) |
-| Spend anomaly | Purchase > 10× declared monthly spend | 0.20 |
-| Refund pattern | > 2 refunds in 30 days | 0.35 |
-| New account high-value | Account < 7 days + purchase > ₹5,000 | 0.40 |
-
-- Score ≥ 0.80 → manual review queue
-- Score ≥ 0.95 → auto-reject
-
----
-
-## Payment Layer (Demo vs Production)
-
-| Component | Demo (College build) | Production |
-|---|---|---|
-| Payments | Stripe test mode | Cashfree / Razorpay (UPI, NACH, IMPS) |
-| KYC | OTP only | Digilocker + Aadhaar |
-| Bank verification | Mocked | Penny drop |
-| Recurring billing | Stripe Billing | NACH mandate |
-
-See PRD §21 and §17 for the production swap checklist.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
+| Decision | Rationale |
 |---|---|
-| Backend | Node.js 20, Express 4 |
-| Database | PostgreSQL 16 |
-| Cache / Queue | Redis 7 |
-| Frontend | React 18, Vite, Zustand |
-| Payments | Stripe (demo) |
-| Auth | JWT (RS256) + mobile OTP |
-| Jobs | node-cron |
-| Containers | Docker Compose (dev) |
+| Raw `pg`, no ORM | Full SQL control for JSONB overlap queries and atomic financial writes |
+| `IPaymentProvider` interface | Swap from Stripe to Cashfree/Razorpay at production is a config change, not a rewrite |
+| Webhook route before `express.json()` | Stripe signature verification requires the raw request body — `express.raw()` must be registered first |
+| Integer arithmetic (paise) in pool distributor | Floats cannot be trusted for money; charity pool receives the remainder to prevent rounding loss |
+| `SELECT ... FOR UPDATE` on attribution sessions | Prevents race conditions when concurrent webhooks arrive for the same session |
+| Redis SETNX idempotency guard | Makes double-processing of Stripe events architecturally impossible |
+| HTTP 200 before async webhook processing | Prevents Stripe retry storms; work is queued via `setImmediate` |
+| TanStack Query for server state | Live cashback balance updates via background polling without manual state management |
+
+---
+
+## Project Status
+
+**Phase 3 — Community, Analytics & Ops** is in progress. See [`CLAUDE.md`](CLAUDE.md) Section 10 for the full phase tracker.
+
+| Phase | Status |
+|---|---|
+| Phase 1 — Foundation | Complete |
+| Phase 2 — Cashback Core | Complete |
+| Phase 3 — Analytics & Ops | In progress |
+| Phase 4 — Mobile, Polish & Deploy | Pending |
+
+---
+
+*AdEarn — Project 16 · Built by Abhishek K · Stripe test mode → Cashfree/Razorpay at production*
