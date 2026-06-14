@@ -56,3 +56,43 @@ export const getWallet = (): Promise<WalletData> =>
 
 export const getTransactions = (): Promise<CashbackTransaction[]> =>
   api.get('/transactions').then((r) => r.data.data);
+
+// Advertiser API
+
+export interface RecentConversion {
+  id: string;
+  created_at: string;
+  cashback_amount: number;
+  purchase_amount: number;
+  status: string;
+}
+
+export interface CampaignStats {
+  campaign: {
+    id: string;
+    name: string;
+    status: string;
+    cashback_rate: string;
+    total_budget: string;
+    spent_to_date: string;
+    ends_at: string | null;
+  };
+  conversions_count: number;
+  total_spent: number;
+  avg_cashback: number;
+  recent_conversions: RecentConversion[];
+}
+
+export interface AdvertiserAnalytics {
+  total_campaigns: number;
+  active_campaigns: number;
+  total_spent: number;
+  total_conversions: number;
+  avg_conversion_rate: number;
+}
+
+export const getCampaignStats = (campaignId: string): Promise<CampaignStats> =>
+  api.get(`/advertiser/campaigns/${campaignId}/stats`).then((r) => r.data.data);
+
+export const getAdvertiserAnalytics = (): Promise<AdvertiserAnalytics> =>
+  api.get('/advertiser/analytics').then((r) => r.data.data);

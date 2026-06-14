@@ -5,6 +5,7 @@ import { FeedPage } from './pages/consumer/FeedPage';
 import { WalletPage } from './pages/consumer/WalletPage';
 import { AdvertiserDashboardPage } from './pages/advertiser/AdvertiserDashboardPage';
 import { CampaignCreatePage } from './pages/advertiser/CampaignCreatePage';
+import { CampaignStatsPage } from './pages/advertiser/CampaignStatsPage';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -55,9 +56,15 @@ const campaignCreateRoute = createRoute({
   component: CampaignCreatePage,
 });
 
+const campaignStatsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/advertiser/campaigns/$campaignId/stats',
+  component: CampaignStatsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute, loginRoute, onboardingRoute, feedRoute, walletRoute,
-  advertiserRoute, campaignCreateRoute,
+  advertiserRoute, campaignCreateRoute, campaignStatsRoute,
 ]);
 
 export const router = createRouter({ routeTree });
