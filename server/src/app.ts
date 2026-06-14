@@ -1,6 +1,7 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import * as Sentry from '@sentry/node';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
@@ -71,6 +72,11 @@ export function createApp(): Application {
   app.use('/api/v1/attribution', attributionRoutes);
   app.use('/api/v1/reviews', reviewRoutes);
   app.use('/api/v1/admin', adminRoutes);
+
+  // Sentry error handler — must come AFTER routes and BEFORE custom error handler
+  if (env.SENTRY_DSN) {
+    Sentry.setupExpressErrorHandler(app);
+  }
 
   // Error handler — MUST be last middleware registered
   app.use(errorHandler);
