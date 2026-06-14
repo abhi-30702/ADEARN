@@ -1,4 +1,5 @@
 import { reviewRepository } from '../repositories/review.repository';
+import { qualityScoreService } from './qualityScore.service';
 import { AppError } from '../lib/AppError';
 import { logger } from '../config/logger';
 
@@ -66,6 +67,13 @@ export const reviewService = {
       },
       'Ad review created',
     );
+
+    // Fire-and-forget quality score update for the campaign's advertiser
+    const { advertiser_id } = transaction;
+    setImmediate(() => {
+      qualityScoreService.updateScore(advertiser_id)
+        .catch(err => logger.warn({ err, advertiserId: advertiser_id }, 'review: quality score update failed'));
+    });
 
     return { composite_score: Number(result.composite_score), created: true };
   },

@@ -21,6 +21,7 @@ interface TransactionRow {
   id: string;
   campaign_id: string;
   status: string;
+  advertiser_id: string;
 }
 
 export const reviewRepository = {
@@ -75,10 +76,11 @@ export const reviewRepository = {
     userId: string,
   ): Promise<TransactionRow | null> {
     const res = await db.query<TransactionRow>(
-      `SELECT id, campaign_id, status
-         FROM cashback_transactions
-        WHERE id = $1
-          AND user_id = $2`,
+      `SELECT ct.id, ct.campaign_id, ct.status, c.advertiser_id
+         FROM cashback_transactions ct
+         JOIN campaigns c ON c.id = ct.campaign_id
+        WHERE ct.id = $1
+          AND ct.user_id = $2`,
       [transactionId, userId],
     );
     return res.rows[0] ?? null;
