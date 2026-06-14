@@ -350,17 +350,17 @@ Update checkboxes as tasks complete. Start every session: "Read CLAUDE.md. Phase
 - [x] Integration tests: webhook (happy path + idempotency + fraud)
 
 ### Phase 3 — Community, Analytics & Ops (Week 9–12)
-- [ ] Ad review API + composite score
-- [ ] Advertiser quality score engine (30-day rolling)
-- [ ] Score thresholds: warn / pause / suspend
-- [ ] `parentFundTransfer.job.ts` — 1st of month
-- [ ] `charityDisbursement.job.ts` — 15th of month + public ledger
-- [ ] `analytics.service.ts`
-- [ ] Advertiser analytics dashboard (recharts + PDF export)
-- [ ] Admin dashboard — fraud queue, users, advertisers
-- [ ] Audit log viewer
-- [ ] Sentry integration (server + web)
-- [ ] Full integration test suite
+- [x] Ad review API + composite score
+- [x] Advertiser quality score engine (30-day rolling)
+- [x] Score thresholds: warn / pause / suspend
+- [x] `parentFundTransfer.job.ts` — 1st of month
+- [x] `charityDisbursement.job.ts` — 15th of month + public ledger
+- [x] `analytics.service.ts`
+- [x] Advertiser analytics dashboard (recharts + PDF export)
+- [x] Admin dashboard — fraud queue, users, advertisers
+- [x] Audit log viewer
+- [x] Sentry integration (server + web)
+- [x] Full integration test suite
 
 ### Phase 4 — Mobile, Polish & Deploy (Week 13–16)
 - [ ] Flutter mobile app — all consumer screens + Stripe checkout
