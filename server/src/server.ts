@@ -3,6 +3,7 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { db } from './config/db';
 import { redis } from './config/redis';
+import { startExpireAttributionsJob } from './jobs/expireAttributions.job';
 
 async function start(): Promise<void> {
   const app = createApp();
@@ -13,6 +14,7 @@ async function start(): Promise<void> {
 
   const server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Server started');
+    startExpireAttributionsJob();
   });
 
   const shutdown = async (signal: string): Promise<void> => {

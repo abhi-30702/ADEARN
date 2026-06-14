@@ -20,7 +20,19 @@
       "PowerShell(New-Item *)",
       "PowerShell($files = [System.IO.Directory]::GetFiles\\(\"D:\\\\SHIVANI_ADEARN\\\\server\\\\src\\\\config\"\\); $files)",
       "Bash(dir D:SHIVANI_ADEARNserversrc *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(node -e \"const e = require\\('./server/node_modules/@types/express'\\); console.log\\('ok'\\)\")",
+      "Bash(npx --prefix server tsc --version)",
+      "Bash(dir D:\\\\SHIVANI_ADEARN\\\\server\\\\src *)",
+      "Bash(npm run *)",
+      "Bash(powershell *)",
+      "Bash(dir D:\\\\SHIVANI_ADEARN *)",
+      "Bash(Get-ChildItem D:/SHIVANI_ADEARN/web/src -Recurse -Filter \"*.tsx\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(npx eslint *)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(npm list *)",
+      "Bash(xargs grep -l \"webhookRoutes\")"
     ]
   }
 }

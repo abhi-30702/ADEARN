@@ -12,6 +12,7 @@ import feedRoutes from './routes/feed.routes';
 import advertiserRoutes from './routes/advertiser.routes';
 import campaignRoutes from './routes/campaign.routes';
 import attributionRoutes from './routes/attribution.routes';
+import webhookRoutes from './routes/webhook.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -36,7 +37,7 @@ export function createApp(): Application {
   // STEP 1: Webhook routes BEFORE express.json() — Stripe webhooks require the raw
   // request body to verify the Stripe-Signature header via constructEvent().
   // Registering them here ensures express.json() never consumes/transforms the body.
-  // app.use('/api/v1/webhooks', webhookRoutes);  // wired in Phase 2
+  app.use('/api/v1/webhooks', webhookRoutes);
 
   // STEP 2: JSON parsing for all other routes (webhooks are exempt via early registration above)
   app.use(express.json({ limit: '1mb' }));
