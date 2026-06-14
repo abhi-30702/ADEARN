@@ -27,6 +27,9 @@ dependencies:
   # Payments
   flutter_stripe: ^10.1.0
 
+  # QR scanning
+  mobile_scanner: ^5.1.0
+
   # UI utilities
   cached_network_image: ^3.3.0
   intl: ^0.19.0

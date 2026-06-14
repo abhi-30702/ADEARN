@@ -9,6 +9,7 @@ import '../features/feed/feed_screen.dart';
 import '../features/wallet/wallet_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/checkout/checkout_screen.dart';
+import '../features/qr/qr_scan_screen.dart';
 import 'auth_repository.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -42,9 +43,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/checkout/:campaignId',
         builder: (ctx, state) {
           final id = state.pathParameters['campaignId']!;
-          return CheckoutScreen(campaignId: id);
+          final amountStr = state.uri.queryParameters['amount'];
+          final amount = amountStr != null
+              ? double.tryParse(amountStr) ?? 1499.0
+              : 1499.0;
+          return CheckoutScreen(campaignId: id, purchaseAmount: amount);
         },
       ),
+      GoRoute(path: '/qr', builder: (ctx, _) => const QRScanScreen()),
     ],
   );
 });

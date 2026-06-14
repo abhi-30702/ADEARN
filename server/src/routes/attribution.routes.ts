@@ -112,4 +112,34 @@ router.get(
   }) as RequestHandler,
 );
 
+// GET /attribution/:id/payment-link
+// Returns a deep-link URL for QR code generation (in-store flow).
+// Response: { success: true, data: { url: "adearn://checkout?session_id=<id>&amount=<amount>" } }
+router.get(
+  '/:id/payment-link',
+  (async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        next(AppError.unauthorized());
+        return;
+      }
+
+      const idParse = z.string().uuid().safeParse(req.params.id);
+      if (!idParse.success) {
+        res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid session ID' } });
+        return;
+      }
+      const sessionId = idParse.data;
+
+      const session = await attributionService.getSession(req.user.sub, sessionId);
+      const url = `adearn://checkout?session_id=${session.id}&amount=${session.purchase_amount}`;
+
+      res.json({ success: true, data: { url, session_id: session.id } });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
 export default router;
+

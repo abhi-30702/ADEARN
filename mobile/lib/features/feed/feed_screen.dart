@@ -26,6 +26,11 @@ class FeedScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.qr_code_scanner,
+                color: Color(0xFF789A99)),
+            onPressed: () => context.push('/qr'),
+          ),
+          IconButton(
             icon: const Icon(Icons.account_balance_wallet_outlined,
                 color: Color(0xFF789A99)),
             onPressed: () => context.push('/wallet'),
