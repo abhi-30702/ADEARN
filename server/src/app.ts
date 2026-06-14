@@ -12,6 +12,7 @@ import feedRoutes from './routes/feed.routes';
 import advertiserRoutes from './routes/advertiser.routes';
 import campaignRoutes from './routes/campaign.routes';
 import attributionRoutes from './routes/attribution.routes';
+import reviewRoutes from './routes/review.routes';
 import webhookRoutes from './routes/webhook.routes';
 
 export function createApp(): Application {
@@ -67,6 +68,7 @@ export function createApp(): Application {
   app.use('/api/v1/advertiser', advertiserRoutes);
   app.use('/api/v1/advertiser/campaigns', campaignRoutes);
   app.use('/api/v1/attribution', attributionRoutes);
+  app.use('/api/v1/reviews', reviewRoutes);
 
   // Error handler — MUST be last middleware registered
   app.use(errorHandler);
