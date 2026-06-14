@@ -72,33 +72,25 @@ export const cashbackEngine = {
       const session = await attributionRepository.lockById(input.sessionId, client);
 
       // ── Step 4: Validate session ───────────────────────────────────────────
+      // NOTE: No client.release() on early-exit throws — the catch block below
+      // is the single release point for all error paths (ROLLBACK + release + re-throw).
       if (!session) {
-        await client.query('ROLLBACK');
-        client.release();
         throw AppError.notFound('Attribution session not found');
       }
 
       if (session.user_id !== input.userId) {
-        await client.query('ROLLBACK');
-        client.release();
         throw AppError.forbidden();
       }
 
       if (session.status !== 'open') {
-        await client.query('ROLLBACK');
-        client.release();
         throw AppError.conflict('Session already processed');
       }
 
       if (new Date(session.expires_at) < new Date()) {
-        await client.query('ROLLBACK');
-        client.release();
         throw AppError.conflict('Attribution session expired');
       }
 
       if (!session.purchase_amount) {
-        await client.query('ROLLBACK');
-        client.release();
         throw AppError.conflict('Purchase amount not set on session');
       }
 
@@ -127,8 +119,6 @@ export const cashbackEngine = {
 
       const campaignRow = campaignRes.rows[0];
       if (!campaignRow) {
-        await client.query('ROLLBACK');
-        client.release();
         throw AppError.notFound('Campaign not found');
       }
 
@@ -157,9 +147,10 @@ export const cashbackEngine = {
       const charityRupees = Math.round(poolSplitPaise.charityAmount) / 100;
 
       // ── Step 10a: INSERT cashback_transactions ─────────────────────────────
+      // Campaign is reachable via attribution_id → attribution_sessions.campaign_id;
+      // cashback_transactions has no campaign_id column of its own.
       const { id: cashbackTxId } = await cashbackRepository.insertCashbackTransaction(client, {
         userId: input.userId,
-        campaignId: session.campaign_id,
         sessionId: input.sessionId,
         purchaseAmount: Number(session.purchase_amount),
         cashbackAmount,
@@ -172,13 +163,14 @@ export const cashbackEngine = {
       });
 
       // ── Step 10b: UPSERT pool_balances (increment) ────────────────────────
+      // All five amounts are passed as paise — SQL divides by 100.0 for storage.
       await cashbackRepository.upsertPoolBalances(client, {
         userId: input.userId,
         liquidAmount: poolSplitPaise.liquidAmount,
         savingsAmount: poolSplitPaise.savingsAmount,
         parentAmount: poolSplitPaise.parentAmount,
         charityAmount: poolSplitPaise.charityAmount,
-        totalEarned: cashbackAmount,
+        totalEarned: Math.round(cashbackAmount * 100),  // paise, same unit as pool amounts
       });
 
       // ── Step 10c: UPDATE campaigns.spent_to_date ──────────────────────────

@@ -2,7 +2,8 @@ import { PoolClient } from 'pg';
 
 export interface InsertCashbackTransactionData {
   userId: string;
-  campaignId: string;
+  // NOTE: campaign_id is not a column in cashback_transactions — the campaign
+  // link is via attribution_sessions.campaign_id (FK through attribution_id).
   sessionId: string;
   purchaseAmount: number;  // rupees
   cashbackAmount: number;  // rupees
@@ -20,7 +21,7 @@ export interface UpsertPoolBalancesData {
   savingsAmount: number;  // paise
   parentAmount: number;   // paise
   charityAmount: number;  // paise
-  totalEarned: number;    // rupees
+  totalEarned: number;    // paise
 }
 
 export interface InsertAuditLogData {
@@ -69,14 +70,15 @@ export const cashbackRepository = {
 
   /**
    * UPSERT pool_balances — increments all four pool columns and total_earned.
-   * Paise amounts are divided by 100 to store as rupees (DECIMAL(12,2)).
+   * All six amounts (liquid, savings, parent, charity, totalEarned) are in paise
+   * and are divided by 100.0 to store as rupees (DECIMAL(12,2)).
    * Must be called inside an open transaction via the provided PoolClient.
    */
   async upsertPoolBalances(client: PoolClient, data: UpsertPoolBalancesData): Promise<void> {
     await client.query(
       `INSERT INTO pool_balances
          (user_id, liquid_balance, savings_balance, parent_pending, charity_pending, total_earned)
-       VALUES ($1, $2 / 100.0, $3 / 100.0, $4 / 100.0, $5 / 100.0, $6)
+       VALUES ($1, $2 / 100.0, $3 / 100.0, $4 / 100.0, $5 / 100.0, $6 / 100.0)
        ON CONFLICT (user_id) DO UPDATE SET
          liquid_balance  = pool_balances.liquid_balance  + EXCLUDED.liquid_balance,
          savings_balance = pool_balances.savings_balance + EXCLUDED.savings_balance,
@@ -125,7 +127,8 @@ export const cashbackRepository = {
     await client.query(
       `UPDATE attribution_sessions
        SET status          = 'converted',
-           cashback_amount = $2
+           cashback_amount = $2,
+           converted_at    = NOW()
        WHERE id = $1`,
       [sessionId, cashbackAmount],
     );
