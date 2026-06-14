@@ -7,6 +7,7 @@ import { AdvertiserDashboardPage } from './pages/advertiser/AdvertiserDashboardP
 import { CampaignCreatePage } from './pages/advertiser/CampaignCreatePage';
 import { CampaignStatsPage } from './pages/advertiser/CampaignStatsPage';
 import { AnalyticsDashboardPage } from './pages/advertiser/AnalyticsDashboardPage';
+import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -69,9 +70,16 @@ const analyticsRoute = createRoute({
   component: AnalyticsDashboardPage,
 });
 
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  component: AdminDashboardPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute, loginRoute, onboardingRoute, feedRoute, walletRoute,
   advertiserRoute, campaignCreateRoute, campaignStatsRoute, analyticsRoute,
+  adminRoute,
 ]);
 
 export const router = createRouter({ routeTree });

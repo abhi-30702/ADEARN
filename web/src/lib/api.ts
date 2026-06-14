@@ -96,3 +96,67 @@ export const getCampaignStats = (campaignId: string): Promise<CampaignStats> =>
 
 export const getAdvertiserAnalytics = (): Promise<AdvertiserAnalytics> =>
   api.get('/advertiser/analytics').then((r) => r.data.data);
+
+// Admin API
+
+export interface FraudQueueRow {
+  id: string;
+  user_id: string;
+  user_mobile: string;
+  campaign_name: string;
+  purchase_amount: string;
+  cashback_amount: string;
+  fraud_score: string;
+  created_at: string;
+}
+
+export interface AdminUserRow {
+  id: string;
+  mobile: string;
+  name: string;
+  role: string;
+  kyc_status: string;
+  is_active: boolean;
+  fraud_flags: number;
+  created_at: string;
+}
+
+export interface PendingAdvertiserRow {
+  id: string;
+  company_name: string;
+  status: string;
+  quality_score: string;
+  contact_email: string;
+  created_at: string;
+}
+
+export interface AdminFinancials {
+  total_cashback_paid: string;
+  total_under_review: string;
+  total_liquid: string;
+  total_savings: string;
+  total_parent_pending: string;
+  total_charity_pending: string;
+  active_users: number;
+}
+
+export const getFraudQueue = (): Promise<FraudQueueRow[]> =>
+  api.get('/admin/fraud-queue').then((r) => r.data.data);
+
+export const resolveFraudCase = (id: string, approved: boolean): Promise<void> =>
+  api.put(`/admin/fraud-queue/${id}/approve`, { approved }).then((r) => r.data);
+
+export const getAdminUsers = (): Promise<AdminUserRow[]> =>
+  api.get('/admin/users').then((r) => r.data.data);
+
+export const suspendUser = (id: string, suspended: boolean): Promise<void> =>
+  api.put(`/admin/users/${id}/suspend`, { suspended }).then((r) => r.data);
+
+export const getPendingAdvertisers = (): Promise<PendingAdvertiserRow[]> =>
+  api.get('/admin/advertisers').then((r) => r.data.data);
+
+export const approveAdvertiser = (id: string, approved: boolean): Promise<void> =>
+  api.put(`/admin/advertisers/${id}/approve`, { approved }).then((r) => r.data);
+
+export const getAdminFinancials = (): Promise<AdminFinancials> =>
+  api.get('/admin/financials').then((r) => r.data.data);
