@@ -334,20 +334,20 @@ Update checkboxes as tasks complete. Start every session: "Read CLAUDE.md. Phase
 - [x] GET /health + CI GitHub Actions workflow
 
 ### Phase 2 — Cashback Core (Week 5–8)
-- [ ] Attribution session management (create, lock, expire, convert)
-- [ ] Stripe PaymentIntent creation endpoint
-- [ ] Stripe webhook handler (express.raw + constructEvent)
-- [ ] Redis idempotency guard
-- [ ] `cashbackEngine.service.ts` — atomic 5-write transaction
-- [ ] `fraudDetection.service.ts` — 4-rule weighted scoring
-- [ ] `poolDistributor.service.ts` — integer arithmetic
-- [ ] `adMatcher.service.ts` — JSONB overlap query
-- [ ] `expireAttributions.job.ts` — every 5 min cron
-- [ ] Notification service (FCM + mock email)
-- [ ] Consumer wallet UI — balances + ledger
-- [ ] Advertiser spend tracking UI
+- [x] Attribution session management (create, lock, expire, convert)
+- [x] Stripe PaymentIntent creation endpoint
+- [x] Stripe webhook handler (express.raw + constructEvent)
+- [x] Redis idempotency guard
+- [x] `cashbackEngine.service.ts` — atomic 5-write transaction
+- [x] `fraudDetection.service.ts` — 4-rule weighted scoring
+- [x] `poolDistributor.service.ts` — integer arithmetic
+- [x] `adMatcher.service.ts` — JSONB overlap query
+- [x] `expireAttributions.job.ts` — every 5 min cron
+- [x] Notification service (FCM + mock email)
+- [x] Consumer wallet UI — balances + ledger
+- [x] Advertiser spend tracking UI
 - [x] Unit tests: cashbackEngine, fraudDetection, poolDistributor
-- [ ] Integration tests: webhook (happy path + idempotency + fraud)
+- [x] Integration tests: webhook (happy path + idempotency + fraud)
 
 ### Phase 3 — Community, Analytics & Ops (Week 9–12)
 - [ ] Ad review API + composite score
