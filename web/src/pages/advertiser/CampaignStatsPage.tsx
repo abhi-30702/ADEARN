@@ -1,6 +1,6 @@
 import { useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { getCampaignStats } from '../../lib/api';
+import { getCampaignStats, CampaignStats, RecentConversion } from '../../lib/api';
 
 function formatCurrency(amount: number): string {
   return `₹${amount.toFixed(2)}`;
@@ -33,7 +33,7 @@ function StatusBadge({ status }: { status: string }) {
 export function CampaignStatsPage() {
   const { campaignId } = useParams({ from: '/advertiser/campaigns/$campaignId/stats' });
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery<CampaignStats>({
     queryKey: ['campaign-stats', campaignId],
     queryFn: () => getCampaignStats(campaignId),
     refetchInterval: 30000,
@@ -167,7 +167,7 @@ export function CampaignStatsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {recent_conversions.map((conv) => (
+                  {recent_conversions.map((conv: RecentConversion) => (
                     <tr key={conv.id} className="hover:bg-peach-light transition-colors">
                       <td className="px-5 py-3 text-gray-700">{formatDate(conv.created_at)}</td>
                       <td className="px-5 py-3 text-gray-700">{formatCurrency(conv.purchase_amount)}</td>
