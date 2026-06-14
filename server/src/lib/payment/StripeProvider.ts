@@ -8,7 +8,12 @@ export class StripeProvider implements IPaymentProvider {
       {
         amount: Math.round(params.amountRupees * 100),
         currency: params.currency,
-        metadata: params.metadata,
+        metadata: {
+          session_id: params.metadata.session_id,
+          user_id: params.metadata.user_id,
+          campaign_id: params.metadata.campaign_id,
+          ...(params.metadata.client_ip ? { client_ip: params.metadata.client_ip } : {}),
+        },
       },
       { idempotencyKey: params.idempotencyKey }
     );

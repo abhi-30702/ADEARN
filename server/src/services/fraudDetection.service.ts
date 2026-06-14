@@ -31,6 +31,7 @@ const HIGH_VALUE_THRESHOLD_RUPEES = 5000;
  * Local IPs score 0 for the geo-mismatch rule.
  */
 function isLocalIp(ip: string): boolean {
+  if (!ip) return true; // missing IP — treat as local/unknown, do not trigger geo rule
   return (
     ip === '127.0.0.1' ||
     ip === '::1' ||

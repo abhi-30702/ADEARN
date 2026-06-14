@@ -5,6 +5,7 @@ export interface CreatePaymentParams {
     session_id: string;
     user_id: string;
     campaign_id: string;
+    client_ip?: string;
   };
   idempotencyKey: string;
 }

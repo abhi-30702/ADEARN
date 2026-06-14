@@ -89,6 +89,7 @@ export const attributionService = {
   async createPaymentIntent(
     userId: string,
     sessionId: string,
+    clientIp?: string,
   ): Promise<{ client_secret: string; payment_intent_id: string; publishable_key: string }> {
     const session = await attributionRepository.findById(sessionId);
 
@@ -124,6 +125,7 @@ export const attributionService = {
         session_id: sessionId,
         user_id: userId,
         campaign_id: session.campaign_id,
+        client_ip: clientIp,
       },
       idempotencyKey: sessionId,
     });

@@ -66,7 +66,7 @@ router.post(
       }
       const sessionId = idParse.data;
 
-      const data = await attributionService.createPaymentIntent(req.user.sub, sessionId);
+      const data = await attributionService.createPaymentIntent(req.user.sub, sessionId, req.ip ?? '');
 
       res.json({ success: true, data });
     } catch (err) {
