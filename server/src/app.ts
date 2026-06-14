@@ -14,6 +14,7 @@ import campaignRoutes from './routes/campaign.routes';
 import attributionRoutes from './routes/attribution.routes';
 import reviewRoutes from './routes/review.routes';
 import webhookRoutes from './routes/webhook.routes';
+import adminRoutes from './routes/admin.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -69,6 +70,7 @@ export function createApp(): Application {
   app.use('/api/v1/advertiser/campaigns', campaignRoutes);
   app.use('/api/v1/attribution', attributionRoutes);
   app.use('/api/v1/reviews', reviewRoutes);
+  app.use('/api/v1/admin', adminRoutes);
 
   // Error handler — MUST be last middleware registered
   app.use(errorHandler);

@@ -4,6 +4,8 @@ import { logger } from './config/logger';
 import { db } from './config/db';
 import { redis } from './config/redis';
 import { startExpireAttributionsJob } from './jobs/expireAttributions.job';
+import { startParentFundTransferJob } from './jobs/parentFundTransfer.job';
+import { startCharityDisbursementJob } from './jobs/charityDisbursement.job';
 
 async function start(): Promise<void> {
   const app = createApp();
@@ -15,6 +17,8 @@ async function start(): Promise<void> {
   const server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Server started');
     startExpireAttributionsJob();
+    startParentFundTransferJob();
+    startCharityDisbursementJob();
   });
 
   const shutdown = async (signal: string): Promise<void> => {
