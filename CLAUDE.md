@@ -365,7 +365,7 @@ Update checkboxes as tasks complete. Start every session: "Read CLAUDE.md. Phase
 ### Phase 4 — Mobile, Polish & Deploy (Week 13–16)
 - [ ] Flutter mobile app — all consumer screens + Stripe checkout
 - [ ] In-store QR Payment Link flow
-- [ ] Load test: 500 webhooks/min (k6)
+- [x] Load test: 500 webhooks/min (k6)
 - [ ] Full regression pass
 - [ ] Railway deploy (backend + DB + Redis)
 - [ ] Vercel deploy (frontend)
