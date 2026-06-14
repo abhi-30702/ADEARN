@@ -114,10 +114,19 @@ function FraudQueueTab() {
       resolveFraudCase(args.id, args.approved),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['admin-fraud-queue'] }),
+    onError: (err) => {
+      console.error('Action failed:', err);
+    },
   });
 
   if (isLoading) {
-    return <Skeleton />;
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={`skeleton-${i}`} className="animate-pulse bg-gray-200 rounded h-10" />
+        ))}
+      </div>
+    );
   }
 
   if (isError) {
@@ -177,14 +186,14 @@ function FraudQueueTab() {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => mutation.mutate({ id: row.id, approved: true })}
-                        disabled={mutation.isPending}
+                        disabled={mutation.isPending && mutation.variables?.id === row.id}
                         className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => mutation.mutate({ id: row.id, approved: false })}
-                        disabled={mutation.isPending}
+                        disabled={mutation.isPending && mutation.variables?.id === row.id}
                         className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors"
                       >
                         Reject
@@ -217,10 +226,19 @@ function UsersTab() {
       suspendUser(args.id, args.suspended),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+    onError: (err) => {
+      console.error('Action failed:', err);
+    },
   });
 
   if (isLoading) {
-    return <Skeleton />;
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={`skeleton-${i}`} className="animate-pulse bg-gray-200 rounded h-10" />
+        ))}
+      </div>
+    );
   }
 
   if (isError) {
@@ -277,7 +295,7 @@ function UsersTab() {
                   {row.is_active ? (
                     <button
                       onClick={() => mutation.mutate({ id: row.id, suspended: true })}
-                      disabled={mutation.isPending}
+                      disabled={mutation.isPending && mutation.variables?.id === row.id}
                       className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors"
                     >
                       Suspend
@@ -285,7 +303,7 @@ function UsersTab() {
                   ) : (
                     <button
                       onClick={() => mutation.mutate({ id: row.id, suspended: false })}
-                      disabled={mutation.isPending}
+                      disabled={mutation.isPending && mutation.variables?.id === row.id}
                       className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors"
                     >
                       Reinstate
@@ -317,10 +335,19 @@ function AdvertisersTab() {
       approveAdvertiser(args.id, args.approved),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['admin-pending-advertisers'] }),
+    onError: (err) => {
+      console.error('Action failed:', err);
+    },
   });
 
   if (isLoading) {
-    return <Skeleton />;
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={`skeleton-${i}`} className="animate-pulse bg-gray-200 rounded h-10" />
+        ))}
+      </div>
+    );
   }
 
   if (isError) {
@@ -367,14 +394,14 @@ function AdvertisersTab() {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => mutation.mutate({ id: row.id, approved: true })}
-                        disabled={mutation.isPending}
+                        disabled={mutation.isPending && mutation.variables?.id === row.id}
                         className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => mutation.mutate({ id: row.id, approved: false })}
-                        disabled={mutation.isPending}
+                        disabled={mutation.isPending && mutation.variables?.id === row.id}
                         className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors"
                       >
                         Reject
