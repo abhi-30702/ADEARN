@@ -8,6 +8,7 @@ import { CampaignCreatePage } from './pages/advertiser/CampaignCreatePage';
 import { CampaignStatsPage } from './pages/advertiser/CampaignStatsPage';
 import { AnalyticsDashboardPage } from './pages/advertiser/AnalyticsDashboardPage';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
+import { AuditLogPage } from './pages/admin/AuditLogPage';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -76,10 +77,16 @@ const adminRoute = createRoute({
   component: AdminDashboardPage,
 });
 
+const auditLogRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/audit-log',
+  component: AuditLogPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute, loginRoute, onboardingRoute, feedRoute, walletRoute,
   advertiserRoute, campaignCreateRoute, campaignStatsRoute, analyticsRoute,
-  adminRoute,
+  adminRoute, auditLogRoute,
 ]);
 
 export const router = createRouter({ routeTree });

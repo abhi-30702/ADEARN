@@ -49,6 +49,19 @@ export interface PendingAdvertiserRow {
   created_at: string;
 }
 
+export interface AuditLogRow {
+  id: string;
+  actor_id: string | null;
+  actor_mobile: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
 export const analyticsRepository = {
   /**
    * Aggregate stats for a single advertiser across all their campaigns.
@@ -226,5 +239,46 @@ export const analyticsRepository = {
       `UPDATE advertisers SET status = $2 WHERE id = $1`,
       [advertiserId, status],
     );
+  },
+
+  // ─── Admin: Audit log ─────────────────────────────────────────────────────
+
+  async getAuditLog(filters: { action?: string; entity_type?: string }, limit = 100): Promise<AuditLogRow[]> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
+
+    if (filters.action) {
+      conditions.push(`al.action = $${paramIdx++}`);
+      params.push(filters.action);
+    }
+    if (filters.entity_type) {
+      conditions.push(`al.entity_type = $${paramIdx++}`);
+      params.push(filters.entity_type);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    params.push(limit);
+
+    const res = await db.query<AuditLogRow>(
+      `SELECT
+         al.id,
+         al.actor_id,
+         u.mobile AS actor_mobile,
+         al.action,
+         al.entity_type,
+         al.entity_id::TEXT AS entity_id,
+         al.before_state,
+         al.after_state,
+         al.ip_address::TEXT AS ip_address,
+         al.created_at::TEXT AS created_at
+       FROM audit_log al
+       LEFT JOIN users u ON u.id = al.actor_id
+       ${where}
+       ORDER BY al.created_at DESC
+       LIMIT $${paramIdx}`,
+      params,
+    );
+    return res.rows;
   },
 };

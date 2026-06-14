@@ -160,3 +160,24 @@ export const approveAdvertiser = (id: string, approved: boolean): Promise<void> 
 
 export const getAdminFinancials = (): Promise<AdminFinancials> =>
   api.get('/admin/financials').then((r) => r.data.data);
+
+export interface AuditLogRow {
+  id: string;
+  actor_id: string | null;
+  actor_mobile: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export const getAuditLog = (params: { action?: string; entity_type?: string }): Promise<AuditLogRow[]> => {
+  const query = new URLSearchParams();
+  if (params.action) query.set('action', params.action);
+  if (params.entity_type) query.set('entity_type', params.entity_type);
+  const qs = query.toString();
+  return api.get(`/admin/audit-log${qs ? `?${qs}` : ''}`).then((r) => r.data.data);
+};

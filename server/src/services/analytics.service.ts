@@ -6,6 +6,7 @@ import type {
   FraudQueueRow,
   AdminUserRow,
   PendingAdvertiserRow,
+  AuditLogRow,
 } from '../repositories/analytics.repository';
 
 export const analyticsService = {
@@ -65,5 +66,10 @@ export const analyticsService = {
     const status = approved ? 'active' : 'suspended';
     logger.info({ advertiserId, status }, 'analyticsService.setAdvertiserApproval');
     await analyticsRepository.setAdvertiserStatus(advertiserId, status);
+  },
+
+  async getAuditLog(filters: { action?: string; entity_type?: string }): Promise<AuditLogRow[]> {
+    logger.info({ filters }, 'analyticsService.getAuditLog');
+    return analyticsRepository.getAuditLog(filters);
   },
 };

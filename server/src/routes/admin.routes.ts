@@ -149,4 +149,22 @@ router.get(
   }) as RequestHandler,
 );
 
+/**
+ * GET /admin/audit-log?action=cashback_processed&entity_type=cashback_transaction
+ * Returns last 100 audit log entries, optionally filtered.
+ */
+router.get(
+  '/audit-log',
+  (async (req, res, next) => {
+    try {
+      const action = typeof req.query['action'] === 'string' ? req.query['action'] : undefined;
+      const entity_type = typeof req.query['entity_type'] === 'string' ? req.query['entity_type'] : undefined;
+      const data = await analyticsService.getAuditLog({ action, entity_type });
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
 export default router;
