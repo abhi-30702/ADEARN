@@ -363,14 +363,14 @@ Update checkboxes as tasks complete. Start every session: "Read CLAUDE.md. Phase
 - [x] Full integration test suite
 
 ### Phase 4 — Mobile, Polish & Deploy (Week 13–16)
-- [ ] Flutter mobile app — all consumer screens + Stripe checkout
-- [ ] In-store QR Payment Link flow
+- [x] Flutter mobile app — all consumer screens + Stripe checkout
+- [x] In-store QR Payment Link flow
 - [x] Load test: 500 webhooks/min (k6)
-- [ ] Full regression pass
-- [ ] Railway deploy (backend + DB + Redis)
-- [ ] Vercel deploy (frontend)
-- [ ] OpenAPI 3.0 spec
-- [ ] README with local setup
+- [x] Full regression pass
+- [x] Railway deploy (backend + DB + Redis)
+- [x] Vercel deploy (frontend)
+- [x] OpenAPI 3.0 spec
+- [x] README with local setup
 - [ ] Demo seed verified on deployed URLs
 - [ ] APK built for demo device
 
