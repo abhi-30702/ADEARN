@@ -1,7 +1,7 @@
 import { createRouter, createRoute, createRootRoute, Outlet } from '@tanstack/react-router';
-import { LoginPage } from './pages/consumer/LoginPage';
 import { OnboardingPage } from './pages/consumer/OnboardingPage';
 import { FeedPage } from './pages/consumer/FeedPage';
+import { LoginPage } from './pages/consumer/LoginPage';
 import { WalletPage } from './pages/consumer/WalletPage';
 import { AdvertiserDashboardPage } from './pages/advertiser/AdvertiserDashboardPage';
 import { CampaignCreatePage } from './pages/advertiser/CampaignCreatePage';
@@ -37,7 +37,12 @@ const indexRoute = createRoute({
   path: '/',
   component: () => {
     const token = localStorage.getItem('access_token');
-    return token ? <FeedPage /> : <LoginPage />;
+    if (!token) {
+      window.location.replace('/login');
+      return null;
+    }
+    window.location.replace('/feed');
+    return null;
   },
 });
 

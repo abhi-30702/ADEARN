@@ -1,113 +1,183 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { api } from '../../lib/api';
+import { useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '../../store/authStore';
+import { api } from '../../lib/api';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Zap } from 'lucide-react';
 
-const mobileSchema = z.object({
-  mobile: z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number'),
-});
+const ROLE_HOME: Record<string, string> = {
+  consumer: '/feed',
+  advertiser: '/advertiser',
+  admin: '/admin',
+};
 
-const otpSchema = z.object({
-  otp: z.string().regex(/^\d{6}$/, 'Enter the 6-digit OTP'),
-});
-
-type MobileInput = z.infer<typeof mobileSchema>;
-type OtpInput = z.infer<typeof otpSchema>;
+const DEMO_ACCOUNTS = [
+  { label: 'Consumer',   phone: '9876543210', color: 'bg-teal-300/10 text-teal-300 border-teal-300/25 hover:bg-teal-300/20' },
+  { label: 'Advertiser', phone: '9123456789', color: 'bg-[#FFD2C2]/10 text-[#FFD2C2] border-[#FFD2C2]/25 hover:bg-[#FFD2C2]/20' },
+  { label: 'Admin',      phone: '9000000000', color: 'bg-blue-400/10 text-blue-400 border-blue-400/25 hover:bg-blue-400/20' },
+];
 
 export function LoginPage() {
-  const [step, setStep] = useState<'mobile' | 'otp'>('mobile');
-  const [mobile, setMobile] = useState('');
+  const navigate = useNavigate();
+  const { setAuth } = useAuthStore();
+  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const setAuth = useAuthStore((s) => s.setAuth);
 
-  const mobileForm = useForm<MobileInput>({ resolver: zodResolver(mobileSchema) });
-  const otpForm = useForm<OtpInput>({ resolver: zodResolver(otpSchema) });
-
-  async function onSubmitMobile(data: MobileInput) {
+  const requestOtp = async (phoneNum = phone) => {
+    setLoading(true);
     setError('');
     try {
-      await api.post('/auth/request-otp', { mobile: data.mobile });
-      setMobile(data.mobile);
+      await api.post('/auth/request-otp', { phone: phoneNum });
+      setPhone(phoneNum);
       setStep('otp');
     } catch {
       setError('Failed to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
-  async function onSubmitOtp(data: OtpInput) {
+  const verifyOtp = async () => {
+    setLoading(true);
     setError('');
     try {
-      const res = await api.post('/auth/verify-otp', { mobile, otp: data.otp });
-      const { access_token, refresh_token, user } = res.data.data as {
+      const res = await api.post('/auth/verify-otp', { phone, otp });
+      const { user, access_token, refresh_token } = res.data.data as {
+        user: { id: string; name: string; role: 'consumer' | 'advertiser' | 'admin'; kyc_status: string };
         access_token: string;
         refresh_token: string;
-        user: { id: string; name: string; role: 'consumer' | 'advertiser' | 'admin'; kyc_status: string };
       };
       setAuth(user, access_token, refresh_token);
-      window.location.href = '/onboarding';
+      navigate({ to: ROLE_HOME[user.role] ?? '/feed' });
     } catch {
-      setError('Invalid OTP. Please try again.');
+      setError('Invalid OTP. Try 123456 for demo accounts.');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  const quickLogin = async (demoPhone: string) => {
+    await requestOtp(demoPhone);
+    setOtp('123456');
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-peach-light">
-      <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">AdEarn</h1>
-        <p className="text-gray-500 text-sm mb-6">Get paid to watch ads &amp; buy products</p>
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ backgroundColor: '#060b14' }}
+    >
+      {/* Background glows */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse 60% 50% at 80% 10%, rgba(94,234,212,0.08) 0%, transparent 70%),' +
+            'radial-gradient(ellipse 50% 40% at 20% 90%, rgba(255,210,194,0.06) 0%, transparent 70%)',
+        }}
+      />
 
-        {step === 'mobile' ? (
-          <form onSubmit={mobileForm.handleSubmit(onSubmitMobile)} className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700">Mobile Number</label>
-              <input
-                {...mobileForm.register('mobile')}
-                placeholder="9876543210"
-                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-aqua"
-              />
-              {mobileForm.formState.errors.mobile && (
-                <p className="text-red-500 text-xs mt-1">{mobileForm.formState.errors.mobile.message}</p>
-              )}
-            </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            <button
-              type="submit"
-              disabled={mobileForm.formState.isSubmitting}
-              className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50"
-            >
-              {mobileForm.formState.isSubmitting ? 'Sending...' : 'Send OTP'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={otpForm.handleSubmit(onSubmitOtp)} className="space-y-4">
-            <p className="text-sm text-gray-600">OTP sent to <strong>{mobile}</strong></p>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Enter OTP</label>
-              <input
-                {...otpForm.register('otp')}
-                placeholder="123456"
-                maxLength={6}
-                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-aqua"
-              />
-              {otpForm.formState.errors.otp && (
-                <p className="text-red-500 text-xs mt-1">{otpForm.formState.errors.otp.message}</p>
-              )}
-            </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            <button
-              type="submit"
-              disabled={otpForm.formState.isSubmitting}
-              className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50"
-            >
-              {otpForm.formState.isSubmitting ? 'Verifying...' : 'Verify OTP'}
-            </button>
-            <button type="button" onClick={() => setStep('mobile')} className="w-full text-sm text-aqua hover:underline">
-              Change mobile number
-            </button>
-          </form>
-        )}
+      <div className="w-full max-w-[400px] relative z-10">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-300 to-teal-600 flex items-center justify-center mb-3 shadow-lg shadow-teal-300/20">
+            <Zap className="w-6 h-6 text-slate-900" strokeWidth={2.5} />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-100 tracking-tight">AdEarn</h1>
+          <p className="text-sm text-slate-400 mt-1">Get paid for every purchase</p>
+        </div>
+
+        {/* Glass card */}
+        <div
+          className="p-6 rounded-[14px]"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          {step === 'phone' ? (
+            <>
+              <h2 className="text-base font-semibold text-slate-100 mb-4">Sign in</h2>
+              <div className="flex flex-col gap-4">
+                <Input
+                  label="Mobile Number"
+                  type="tel"
+                  placeholder="Enter 10-digit mobile"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onKeyDown={e => e.key === 'Enter' && phone.length === 10 && requestOtp()}
+                />
+                {error && <p className="text-xs text-red-400">{error}</p>}
+                <Button
+                  onClick={() => requestOtp()}
+                  loading={loading}
+                  disabled={phone.length !== 10}
+                  className="w-full"
+                >
+                  Send OTP
+                </Button>
+              </div>
+
+              {/* Demo accounts */}
+              <div
+                className="mt-6 pt-5"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.7px] text-slate-500 mb-3">
+                  Demo Accounts
+                </p>
+                <div className="flex gap-2">
+                  {DEMO_ACCOUNTS.map(acc => (
+                    <button
+                      key={acc.label}
+                      onClick={() => quickLogin(acc.phone)}
+                      disabled={loading}
+                      className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${acc.color}`}
+                    >
+                      {acc.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors mb-4 flex items-center gap-1"
+              >
+                ← Back
+              </button>
+              <h2 className="text-base font-semibold text-slate-100 mb-1">Enter OTP</h2>
+              <p className="text-xs text-slate-400 mb-4">Sent to +91 {phone}</p>
+              <div className="flex flex-col gap-4">
+                <Input
+                  label="OTP"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="6-digit code"
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onKeyDown={e => e.key === 'Enter' && otp.length === 6 && verifyOtp()}
+                />
+                {error && <p className="text-xs text-red-400">{error}</p>}
+                <Button
+                  onClick={verifyOtp}
+                  loading={loading}
+                  disabled={otp.length !== 6}
+                  className="w-full"
+                >
+                  Verify & Sign in
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

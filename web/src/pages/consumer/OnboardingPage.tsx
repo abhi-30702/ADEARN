@@ -1,190 +1,237 @@
 import { useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { useNavigate } from '@tanstack/react-router';
+import { clsx } from 'clsx';
 import { api } from '../../lib/api';
+import { Button } from '../../components/ui/Button';
+import { CheckCircle2, Zap } from 'lucide-react';
 
-const profileSchema = z.object({
-  categories: z.array(z.object({
-    category: z.string().min(1),
-    brands: z.string().min(1),
-    spend_range: z.string().min(1),
-    frequency: z.enum(['Daily', 'Weekly', 'Monthly', 'Occasionally']),
-  })).min(1),
-});
+const CATEGORIES = [
+  'Health & Beauty', 'Electronics', 'Fashion', 'Grocery',
+  'Home & Kitchen', 'Sports', 'Books', 'Toys',
+];
 
-const poolSchema = z.object({
-  liquid_pct: z.coerce.number().int().min(0).max(100),
-  savings_pct: z.coerce.number().int().min(0).max(100),
-  parent_pct: z.coerce.number().int().min(0).max(100),
-  charity_pct: z.coerce.number().int().min(0).max(100),
-  savings_goal: z.string().optional(),
-}).refine(
-  (d) => d.liquid_pct + d.savings_pct + d.parent_pct + d.charity_pct === 100,
-  { message: 'Percentages must sum to 100' }
-);
+const POOL_DEFAULTS = { liquid: 40, savings: 30, parent: 20, charity: 10 };
 
-type ProfileInput = z.infer<typeof profileSchema>;
-type PoolInput = z.infer<typeof poolSchema>;
+type Pools = { liquid: number; savings: number; parent: number; charity: number };
+
+const POOL_CONFIG = [
+  { key: 'liquid'  as const, label: 'Liquid',  color: 'text-teal-300',   bar: 'bg-teal-300'   },
+  { key: 'savings' as const, label: 'Savings', color: 'text-blue-400',   bar: 'bg-blue-400'   },
+  { key: 'parent'  as const, label: 'Parent',  color: 'text-purple-400', bar: 'bg-purple-400' },
+  { key: 'charity' as const, label: 'Charity', color: 'text-[#FFD2C2]',  bar: 'bg-[#FFD2C2]'  },
+];
 
 export function OnboardingPage() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [selectedCats, setSelectedCats] = useState<string[]>([]);
+  const [pools, setPools] = useState<Pools>(POOL_DEFAULTS);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const profileForm = useForm<ProfileInput>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      categories: [{ category: 'Health & Beauty', brands: 'Mamaearth', spend_range: '₹1K–5K', frequency: 'Monthly' }],
-    },
-  });
+  const toggleCat = (cat: string) => {
+    setSelectedCats(prev =>
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    );
+  };
 
-  const poolForm = useForm<PoolInput>({
-    resolver: zodResolver(poolSchema),
-    defaultValues: { liquid_pct: 40, savings_pct: 30, parent_pct: 20, charity_pct: 10, savings_goal: 'Emergency Fund' },
-  });
+  const poolSum = Object.values(pools).reduce((a, b) => a + b, 0);
 
-  const { fields, append, remove } = useFieldArray({ control: profileForm.control, name: 'categories' });
+  const adjustPool = (key: keyof Pools, val: number) => {
+    const clamped = Math.max(0, Math.min(100, val));
+    const others = (Object.keys(pools) as (keyof Pools)[]).filter(k => k !== key);
+    const oldSum = others.reduce((s, k) => s + pools[k], 0);
+    const remaining = 100 - clamped;
+    const newPools = { ...pools, [key]: clamped };
+    if (oldSum > 0) {
+      others.forEach(k => {
+        newPools[k] = Math.round((pools[k] / oldSum) * remaining);
+      });
+    }
+    const actual = (Object.values(newPools) as number[]).reduce((a, b) => a + b, 0);
+    if (actual !== 100) newPools[others[others.length - 1]] += 100 - actual;
+    setPools(newPools);
+  };
 
-  async function onSubmitProfile(data: ProfileInput) {
+  const saveProfile = async () => {
+    setLoading(true);
     setError('');
     try {
-      const categories = data.categories.map((c) => ({
-        ...c,
-        brands: c.brands.split(',').map((b) => b.trim()).filter(Boolean),
-      }));
-      await api.put('/profile', { categories });
+      await api.put('/profile', {
+        categories: selectedCats,
+        brand_affinity: [],
+        price_range: 'mid',
+      });
       setStep(2);
     } catch {
       setError('Failed to save profile. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
-  async function onSubmitPool(data: PoolInput) {
+  const savePools = async () => {
+    setLoading(true);
     setError('');
     try {
-      await api.put('/pool-config', data);
+      await api.put('/pool-config', {
+        liquid_pct: pools.liquid,
+        savings_pct: pools.savings,
+        parent_pct: pools.parent,
+        charity_pct: pools.charity,
+      });
       setStep(3);
     } catch {
-      setError('Failed to save pool config. Please try again.');
+      setError('Failed to save pool configuration.');
+    } finally {
+      setLoading(false);
     }
-  }
-
-  if (step === 3) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-peach-light">
-        <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm text-center">
-          <div className="text-4xl mb-4">🎉</div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">You&apos;re all set!</h2>
-          <p className="text-gray-500 text-sm mb-6">Start watching matched ads and earning cashback.</p>
-          <a href="/feed" className="inline-block w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark text-center">
-            Go to Feed
-          </a>
-        </div>
-      </div>
-    );
-  }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-peach-light">
-      <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
-        <div className="flex gap-2 mb-6">
-          {[1, 2].map((s) => (
-            <div key={s} className={`h-1 flex-1 rounded-full ${step >= s ? 'bg-aqua' : 'bg-gray-200'}`} />
-          ))}
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ backgroundColor: '#060b14' }}
+    >
+      <div className="w-full max-w-[520px]">
+        {/* Logo */}
+        <div className="flex items-center gap-2 justify-center mb-6">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-300 to-teal-600 flex items-center justify-center">
+            <Zap className="w-4 h-4 text-slate-900" strokeWidth={2.5} />
+          </div>
+          <span className="font-bold text-slate-100 text-base">AdEarn</span>
         </div>
 
-        {step === 1 && (
-          <>
-            <h2 className="text-lg font-bold text-gray-900 mb-1">Your Shopping Profile</h2>
-            <p className="text-gray-500 text-sm mb-4">Tell us what you buy so we match the right ads.</p>
-            <form onSubmit={profileForm.handleSubmit(onSubmitProfile)} className="space-y-4">
-              {fields.map((field, i) => (
-                <div key={field.id} className="border border-gray-200 rounded-lg p-3 space-y-2">
-                  <input
-                    {...profileForm.register(`categories.${i}.category`)}
-                    placeholder="Category (e.g. Health & Beauty)"
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm"
-                  />
-                  <input
-                    {...profileForm.register(`categories.${i}.brands`)}
-                    placeholder="Brands (comma separated)"
-                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm"
-                  />
-                  <div className="flex gap-2">
-                    <input
-                      {...profileForm.register(`categories.${i}.spend_range`)}
-                      placeholder="Spend range"
-                      className="flex-1 border border-gray-200 rounded px-2 py-1 text-sm"
-                    />
-                    <select
-                      {...profileForm.register(`categories.${i}.frequency`)}
-                      className="border border-gray-200 rounded px-2 py-1 text-sm"
-                    >
-                      <option>Monthly</option>
-                      <option>Weekly</option>
-                      <option>Daily</option>
-                      <option>Occasionally</option>
-                    </select>
-                  </div>
-                  {fields.length > 1 && (
-                    <button type="button" onClick={() => remove(i)} className="text-red-500 text-xs">Remove</button>
-                  )}
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => append({ category: '', brands: '', spend_range: '', frequency: 'Monthly' })}
-                className="text-aqua text-sm"
-              >
-                + Add category
-              </button>
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              <button type="submit" disabled={profileForm.formState.isSubmitting}
-                className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50">
-                Continue
-              </button>
-            </form>
-          </>
+        {/* Progress bar */}
+        {step < 3 && (
+          <div className="mb-6">
+            <div className="flex justify-between text-[11px] font-semibold uppercase tracking-[0.7px] text-slate-500 mb-2">
+              <span>Step {step} of 2</span>
+              <span>{step === 1 ? 'Shopping Profile' : 'Earning Pools'}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-white/[0.08]">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-teal-300 to-teal-400 transition-all duration-500"
+                style={{ width: step === 1 ? '50%' : '100%' }}
+              />
+            </div>
+          </div>
         )}
 
-        {step === 2 && (
-          <>
-            <h2 className="text-lg font-bold text-gray-900 mb-1">Cashback Distribution</h2>
-            <p className="text-gray-500 text-sm mb-4">How should we split your cashback? Must total 100%.</p>
-            <form onSubmit={poolForm.handleSubmit(onSubmitPool)} className="space-y-3">
-              {(['liquid_pct', 'savings_pct', 'parent_pct', 'charity_pct'] as const).map((field) => (
-                <div key={field} className="flex items-center gap-3">
-                  <label className="text-sm text-gray-700 w-36">
-                    {field === 'liquid_pct' ? 'Instant Cash' :
-                     field === 'savings_pct' ? 'Savings' :
-                     field === 'parent_pct' ? 'Parent Fund' : 'Charity'}
-                  </label>
-                  <input
-                    {...poolForm.register(field)}
-                    type="number"
-                    min={0}
-                    max={100}
-                    className="border border-gray-200 rounded px-2 py-1 text-sm w-16 text-center"
-                  />
-                  <span className="text-sm text-gray-500">%</span>
-                </div>
-              ))}
-              <input
-                {...poolForm.register('savings_goal')}
-                placeholder="Savings goal (e.g. Emergency Fund)"
-                className="w-full border border-gray-200 rounded px-2 py-1 text-sm mt-2"
-              />
-              {poolForm.formState.errors.root?.message && (
-                <p className="text-red-500 text-sm">{poolForm.formState.errors.root.message}</p>
-              )}
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              <button type="submit" disabled={poolForm.formState.isSubmitting}
-                className="w-full bg-aqua text-white py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark disabled:opacity-50 mt-2">
+        {/* Glass card */}
+        <div
+          className="p-6 rounded-[14px]"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          {/* Step 1: Categories */}
+          {step === 1 && (
+            <>
+              <h2 className="text-base font-semibold text-slate-100 mb-1">
+                Your Shopping Interests
+              </h2>
+              <p className="text-sm text-slate-400 mb-5">
+                Select categories you shop in (choose at least one)
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
+                {CATEGORIES.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => toggleCat(cat)}
+                    className={clsx(
+                      'px-3 py-2.5 rounded-lg border text-xs font-medium transition-all duration-150',
+                      selectedCats.includes(cat)
+                        ? 'bg-teal-300/[0.15] border-teal-300/30 text-teal-300'
+                        : 'bg-white/[0.04] border-white/[0.08] text-slate-400 hover:text-slate-200 hover:bg-white/[0.08]'
+                    )}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+              <Button
+                onClick={saveProfile}
+                loading={loading}
+                disabled={selectedCats.length === 0}
+                className="w-full"
+              >
+                Continue
+              </Button>
+            </>
+          )}
+
+          {/* Step 2: Pool sliders */}
+          {step === 2 && (
+            <>
+              <h2 className="text-base font-semibold text-slate-100 mb-1">Cashback Split</h2>
+              <p className="text-sm text-slate-400 mb-5">
+                Set how your earnings are distributed across pools
+              </p>
+              <div className="flex flex-col gap-5 mb-5">
+                {POOL_CONFIG.map(p => (
+                  <div key={p.key}>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className={`text-sm font-medium ${p.color}`}>{p.label}</span>
+                      <span className="text-sm font-bold text-slate-200">{pools[p.key]}%</span>
+                    </div>
+                    <div className="relative">
+                      <div className="h-2 rounded-full bg-white/[0.08] mb-1">
+                        <div
+                          className={`h-full rounded-full transition-all ${p.bar}`}
+                          style={{ width: `${pools[p.key]}%` }}
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={pools[p.key]}
+                        onChange={e => adjustPool(p.key, Number(e.target.value))}
+                        className="absolute inset-0 w-full opacity-0 h-2 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className={clsx(
+                'text-center text-sm font-semibold mb-4',
+                poolSum === 100 ? 'text-emerald-400' : 'text-red-400'
+              )}>
+                Total: {poolSum}%{poolSum !== 100 ? ' (must equal 100%)' : ' ✓'}
+              </div>
+              {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+              <Button
+                onClick={savePools}
+                loading={loading}
+                disabled={poolSum !== 100}
+                className="w-full"
+              >
                 Save &amp; Continue
-              </button>
-            </form>
-          </>
-        )}
+              </Button>
+            </>
+          )}
+
+          {/* Step 3: Success */}
+          {step === 3 && (
+            <div className="flex flex-col items-center py-6">
+              <div className="w-16 h-16 rounded-full bg-emerald-400/10 border border-emerald-400/25 flex items-center justify-center mb-4">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-100 mb-2">You&apos;re all set!</h2>
+              <p className="text-sm text-slate-400 text-center mb-6">
+                Your profile is ready. Start exploring ads matched to your interests.
+              </p>
+              <Button onClick={() => void navigate({ to: '/feed' })} className="w-full">
+                Go to Feed →
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,11 @@
-import { useParams } from '@tanstack/react-router';
+import { useParams, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { getCampaignStats, CampaignStats, RecentConversion } from '../../lib/api';
+import { AppLayout } from '../../components/AppLayout';
+import { KpiCard, GlassCard, DataTable, StatusBadge, Button } from '../../components/ui';
+import type { TableColumn } from '../../components/ui';
+import { getCampaignStats } from '../../lib/api';
+import type { RecentConversion } from '../../lib/api';
+import { ArrowLeft, ShoppingCart, DollarSign, TrendingUp, Activity } from 'lucide-react';
 
 function formatCurrency(amount: number): string {
   return `₹${amount.toFixed(2)}`;
@@ -14,179 +19,175 @@ function formatDate(iso: string): string {
   });
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const classes =
-    status === 'active'
-      ? 'bg-green-100 text-green-700'
-      : status === 'pending_review'
-        ? 'bg-yellow-100 text-yellow-700'
-        : status === 'paused'
-          ? 'bg-orange-100 text-orange-700'
-          : 'bg-gray-100 text-gray-600';
-  return (
-    <span className={`text-xs px-2 py-1 rounded-full font-medium ${classes}`}>
-      {status.replace(/_/g, ' ')}
-    </span>
-  );
+interface ConversionRow extends Record<string, unknown> {
+  id: string;
+  created_at: string;
+  purchase_amount: number;
+  cashback_amount: number;
+  status: string;
 }
 
 export function CampaignStatsPage() {
   const { campaignId } = useParams({ from: '/advertiser/campaigns/$campaignId/stats' });
+  const navigate = useNavigate();
 
-  const { data, isLoading, isError } = useQuery<CampaignStats>({
+  const { data, isLoading } = useQuery({
     queryKey: ['campaign-stats', campaignId],
     queryFn: () => getCampaignStats(campaignId),
     refetchInterval: 30000,
     enabled: Boolean(campaignId),
   });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-peach-light flex items-center justify-center">
-        <p className="text-gray-400">Loading campaign stats...</p>
-      </div>
-    );
-  }
+  const campaign = data?.campaign;
+  const budgetTotal = campaign ? Number(campaign.total_budget) : 0;
+  const budgetSpent = campaign ? Number(campaign.spent_to_date) : 0;
+  const budgetUsedPct = budgetTotal > 0 ? (budgetSpent / budgetTotal) * 100 : 0;
 
-  if (isError || !data) {
-    return (
-      <div className="min-h-screen bg-peach-light flex items-center justify-center">
-        <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-          <p className="text-red-500 font-medium mb-4">Failed to load campaign stats.</p>
-          <a href="/advertiser" className="text-aqua text-sm hover:underline">
-            Back to Dashboard
-          </a>
-        </div>
-      </div>
-    );
-  }
+  const convRate = data && data.conversions_count > 0
+    ? ((data.conversions_count / Math.max(1, data.conversions_count)) * 100).toFixed(1)
+    : '0.0';
 
-  const { campaign, conversions_count, total_spent, avg_cashback, recent_conversions } = data;
+  const conversionRows: ConversionRow[] = (data?.recent_conversions ?? []).map(
+    (c: RecentConversion) => ({
+      id: c.id,
+      created_at: c.created_at,
+      purchase_amount: c.purchase_amount,
+      cashback_amount: c.cashback_amount,
+      status: c.status,
+    })
+  );
 
-  const budgetTotal = Number(campaign.total_budget);
-  const budgetRemaining = budgetTotal - Number(campaign.spent_to_date);
-  const budgetUsedPct = budgetTotal > 0 ? (Number(campaign.spent_to_date) / budgetTotal) * 100 : 0;
+  const columns: TableColumn<ConversionRow>[] = [
+    {
+      key: 'created_at',
+      label: 'Date',
+      render: (v) => <span className="text-slate-400">{formatDate(String(v))}</span>,
+    },
+    {
+      key: 'purchase_amount',
+      label: 'Purchase',
+      render: (v) => <span className="text-slate-300">{formatCurrency(Number(v))}</span>,
+    },
+    {
+      key: 'cashback_amount',
+      label: 'Cashback Paid',
+      render: (v) => <span className="font-semibold text-teal-300">{formatCurrency(Number(v))}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (v) => <StatusBadge status={String(v)} />,
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-peach-light">
-      <nav className="bg-white border-b px-6 py-3 flex items-center gap-4">
-        <a href="/advertiser" className="text-sm text-aqua hover:underline">
-          ← Back
-        </a>
-        <span className="font-medium text-gray-900">{campaign.name}</span>
-        <StatusBadge status={campaign.status} />
-      </nav>
+    <AppLayout
+      title={campaign?.name ?? 'Campaign Stats'}
+      subtitle={campaign ? `Campaign ID: ${campaignId}` : undefined}
+      actions={
+        <Button
+          variant="ghost"
+          icon={<ArrowLeft className="w-4 h-4" />}
+          onClick={() => void navigate({ to: '/advertiser' })}
+        >
+          Back
+        </Button>
+      }
+    >
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <KpiCard
+          label="Conversions"
+          value={data?.conversions_count ?? 0}
+          icon={<ShoppingCart className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Total Spent"
+          value={data ? formatCurrency(data.total_spent) : '—'}
+          icon={<DollarSign className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Avg Cashback"
+          value={data && data.conversions_count > 0 ? formatCurrency(data.avg_cashback) : '—'}
+          icon={<TrendingUp className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Conv. Rate"
+          value={`${convRate}%`}
+          icon={<Activity className="w-5 h-5" />}
+        />
+      </div>
 
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Conversions</p>
-            <p className="text-3xl font-bold text-gray-900 mt-1">{conversions_count}</p>
+      {/* Campaign details card */}
+      {campaign && (
+        <GlassCard className="p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-200">Campaign Details</h3>
+            <StatusBadge status={campaign.status} />
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Total Spent</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(total_spent)}</p>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Avg Cashback</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">
-              {conversions_count > 0 ? formatCurrency(avg_cashback) : '—'}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Status</p>
-            <div className="mt-2">
-              <StatusBadge status={campaign.status} />
-            </div>
-          </div>
-        </div>
 
-        {/* Campaign details */}
-        <div className="bg-white rounded-xl p-5 shadow-sm space-y-4">
-          <h2 className="font-semibold text-gray-900">Campaign Details</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-5">
             <div>
-              <p className="text-gray-500">Cashback Rate</p>
-              <p className="font-medium text-gray-900 mt-0.5">
+              <p className="text-slate-500 text-xs mb-1">Cashback Rate</p>
+              <p className="font-semibold text-teal-300">
                 {(Number(campaign.cashback_rate) * 100).toFixed(1)}%
               </p>
             </div>
             <div>
-              <p className="text-gray-500">Total Budget</p>
-              <p className="font-medium text-gray-900 mt-0.5">{formatCurrency(budgetTotal)}</p>
+              <p className="text-slate-500 text-xs mb-1">Total Budget</p>
+              <p className="font-medium text-slate-200">{formatCurrency(budgetTotal)}</p>
             </div>
             <div>
-              <p className="text-gray-500">Budget Remaining</p>
-              <p className={`font-medium mt-0.5 ${budgetRemaining < budgetTotal * 0.1 ? 'text-red-600' : 'text-gray-900'}`}>
-                {formatCurrency(budgetRemaining)}
+              <p className="text-slate-500 text-xs mb-1">Budget Remaining</p>
+              <p className={`font-medium ${(budgetTotal - budgetSpent) < budgetTotal * 0.1 ? 'text-red-400' : 'text-slate-200'}`}>
+                {formatCurrency(budgetTotal - budgetSpent)}
               </p>
             </div>
             <div>
-              <p className="text-gray-500">Expires</p>
-              <p className="font-medium text-gray-900 mt-0.5">
+              <p className="text-slate-500 text-xs mb-1">Expires</p>
+              <p className="font-medium text-slate-200">
                 {campaign.ends_at ? formatDate(campaign.ends_at) : 'No expiry'}
               </p>
             </div>
           </div>
 
-          {/* Budget progress bar */}
+          {/* Budget progress */}
           <div>
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <div className="flex justify-between text-xs text-slate-500 mb-1.5">
               <span>Budget used</span>
               <span>{budgetUsedPct.toFixed(1)}%</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2">
+            <div className="h-1.5 rounded-full bg-white/[0.08]">
               <div
-                className={`h-2 rounded-full transition-all ${budgetUsedPct >= 90 ? 'bg-red-500' : budgetUsedPct >= 70 ? 'bg-orange-400' : 'bg-aqua'}`}
+                className={`h-full rounded-full transition-all ${
+                  budgetUsedPct >= 90
+                    ? 'bg-red-400'
+                    : budgetUsedPct >= 70
+                    ? 'bg-amber-400'
+                    : 'bg-gradient-to-r from-teal-300 to-teal-400'
+                }`}
                 style={{ width: `${Math.min(budgetUsedPct, 100)}%` }}
               />
             </div>
           </div>
-        </div>
+        </GlassCard>
+      )}
 
-        {/* Recent conversions table */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b">
-            <h2 className="font-semibold text-gray-900">Recent Conversions</h2>
+      {/* Recent conversions */}
+      <GlassCard className="overflow-hidden">
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-200">Recent Conversions</h3>
+            <span className="text-[11px] text-slate-500">Auto-refreshes every 30s</span>
           </div>
-
-          {recent_conversions.length === 0 ? (
-            <div className="px-5 py-10 text-center text-gray-400 text-sm">
-              No conversions yet. Conversions appear here after customers complete purchases.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
-                    <th className="px-5 py-3">Date</th>
-                    <th className="px-5 py-3">Purchase Amount</th>
-                    <th className="px-5 py-3">Cashback Paid</th>
-                    <th className="px-5 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {recent_conversions.map((conv: RecentConversion) => (
-                    <tr key={conv.id} className="hover:bg-peach-light transition-colors">
-                      <td className="px-5 py-3 text-gray-700">{formatDate(conv.created_at)}</td>
-                      <td className="px-5 py-3 text-gray-700">{formatCurrency(conv.purchase_amount)}</td>
-                      <td className="px-5 py-3 font-medium text-gray-900">
-                        {formatCurrency(conv.cashback_amount)}
-                      </td>
-                      <td className="px-5 py-3">
-                        <StatusBadge status={conv.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
-
-        <p className="text-center text-xs text-gray-400">Auto-refreshes every 30 seconds</p>
-      </div>
-    </div>
+        <DataTable
+          columns={columns}
+          rows={conversionRows}
+          loading={isLoading}
+          emptyMessage="No conversions yet — conversions appear after customers complete purchases"
+        />
+      </GlassCard>
+    </AppLayout>
   );
 }

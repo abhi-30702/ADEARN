@@ -1,80 +1,128 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { AppLayout } from '../../components/AppLayout';
+import { KpiCard, GlassCard, DataTable, StatusBadge, Button } from '../../components/ui';
+import type { TableColumn } from '../../components/ui';
 import { api } from '../../lib/api';
-import { useAuthStore } from '../../store/authStore';
+import { Plus, BarChart2, DollarSign, Target, TrendingUp } from 'lucide-react';
 
-interface Campaign {
+interface Campaign extends Record<string, unknown> {
   id: string;
   name: string;
   status: string;
   cashback_rate: string;
-  spent_to_date: string;
   total_budget: string;
-  created_at: string;
-}
-
-async function fetchCampaigns(): Promise<Campaign[]> {
-  const res = await api.get('/advertiser/campaigns');
-  return res.data.data;
+  spent_to_date: string;
+  conversion_count: number;
 }
 
 export function AdvertiserDashboardPage() {
-  const user = useAuthStore((s) => s.user);
-  const { data: campaigns = [], isLoading } = useQuery({
+  const navigate = useNavigate();
+
+  const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
     queryKey: ['advertiser-campaigns'],
-    queryFn: fetchCampaigns,
+    queryFn: async () => {
+      const res = await api.get('/advertiser/campaigns');
+      return (res.data.data ?? []) as Campaign[];
+    },
   });
 
-  return (
-    <div className="min-h-screen bg-peach-light">
-      <nav className="bg-white border-b px-6 py-3 flex items-center justify-between">
-        <span className="font-bold text-aqua">AdEarn for Business</span>
-        <span className="text-sm text-gray-600">{user?.name}</span>
-      </nav>
+  const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
+  const totalSpend = campaigns.reduce((s, c) => s + Number(c.spent_to_date), 0);
+  const totalConversions = campaigns.reduce((s, c) => s + Number(c.conversion_count), 0);
+  const convRate = campaigns.length > 0
+    ? ((totalConversions / campaigns.length) * 100).toFixed(1)
+    : '0.0';
 
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Campaigns</h1>
-          <a
-            href="/advertiser/campaigns/new"
-            className="bg-aqua text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-aqua-dark"
-          >
-            New Campaign
-          </a>
+  const columns: TableColumn<Campaign>[] = [
+    { key: 'name', label: 'Campaign' },
+    {
+      key: 'status', label: 'Status',
+      render: (v) => <StatusBadge status={String(v)} />,
+    },
+    {
+      key: 'spent_to_date', label: 'Budget Usage',
+      render: (v, row) => (
+        <div className="min-w-[140px]">
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-slate-300">₹{Number(v).toFixed(0)}</span>
+            <span className="text-slate-500">₹{Number(row.total_budget).toFixed(0)}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/[0.08]">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-teal-300 to-teal-400"
+              style={{ width: `${Math.min(100, (Number(v) / Number(row.total_budget)) * 100)}%` }}
+            />
+          </div>
         </div>
+      ),
+    },
+    {
+      key: 'cashback_rate', label: 'Cashback',
+      render: (v) => (
+        <span className="text-teal-300 font-semibold">
+          {(Number(v) * 100).toFixed(1)}%
+        </span>
+      ),
+    },
+    {
+      key: 'conversion_count', label: 'Conversions',
+      render: (v) => <span className="font-semibold text-slate-200">{String(v)}</span>,
+    },
+  ];
 
-        {isLoading ? (
-          <div className="text-center py-12 text-gray-400">Loading...</div>
-        ) : campaigns.length === 0 ? (
-          <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
-            <p className="text-gray-500">No campaigns yet. Create your first campaign to start reaching customers.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {campaigns.map((c) => (
-              <div key={c.id} className="bg-white rounded-xl p-4 shadow-sm flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">{c.name}</p>
-                  <p className="text-sm text-gray-500">
-                    {Number(c.cashback_rate) * 100}% cashback · ₹{Number(c.spent_to_date).toFixed(2)} spent
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    c.status === 'active' ? 'bg-green-100 text-green-700' :
-                    c.status === 'pending_review' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-gray-100 text-gray-600'
-                  }`}>
-                    {c.status.replace('_', ' ')}
-                  </span>
-                  <a href={`/advertiser/campaigns/${c.id}/stats`} className="text-aqua text-sm hover:underline">
-                    Stats
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+  return (
+    <AppLayout
+      title="Advertiser Dashboard"
+      actions={
+        <Button
+          icon={<Plus className="w-4 h-4" />}
+          onClick={() => void navigate({ to: '/advertiser/campaigns/new' })}
+        >
+          New Campaign
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <KpiCard
+          label="Total Spend"
+          value={`₹${totalSpend.toFixed(2)}`}
+          icon={<DollarSign className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Active Campaigns"
+          value={activeCampaigns}
+          icon={<BarChart2 className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Conversions"
+          value={totalConversions}
+          icon={<Target className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Avg Conv. Rate"
+          value={`${convRate}%`}
+          icon={<TrendingUp className="w-5 h-5" />}
+        />
       </div>
-    </div>
+
+      <GlassCard className="overflow-hidden">
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <h3 className="text-sm font-semibold text-slate-200">Campaigns</h3>
+        </div>
+        <DataTable
+          columns={columns}
+          rows={campaigns}
+          loading={isLoading}
+          onRowClick={row =>
+            void navigate({
+              to: '/advertiser/campaigns/$campaignId/stats',
+              params: { campaignId: row.id },
+            })
+          }
+          emptyMessage="No campaigns yet — create your first one"
+        />
+      </GlassCard>
+    </AppLayout>
   );
 }
