@@ -15,6 +15,7 @@ import campaignRoutes from './routes/campaign.routes';
 import attributionRoutes from './routes/attribution.routes';
 import reviewRoutes from './routes/review.routes';
 import webhookRoutes from './routes/webhook.routes';
+import walletRoutes from './routes/wallet.routes';
 import adminRoutes from './routes/admin.routes';
 
 export function createApp(): Application {
@@ -71,6 +72,7 @@ export function createApp(): Application {
   app.use('/api/v1/advertiser/campaigns', campaignRoutes);
   app.use('/api/v1/attribution', attributionRoutes);
   app.use('/api/v1/reviews', reviewRoutes);
+  app.use('/api/v1/wallet', walletRoutes);
   app.use('/api/v1/admin', adminRoutes);
 
   // Sentry error handler — must come AFTER routes and BEFORE custom error handler

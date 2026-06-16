@@ -34,7 +34,7 @@ export const feedRepository = {
         AND c.ends_at   >= NOW()
         AND c.spent_to_date < c.total_budget
         AND c.target_profile->'categories' ?|
-            ARRAY(SELECT jsonb_array_elements_text(p.categories->'categories'))
+            ARRAY(SELECT elem->>'category' FROM jsonb_array_elements(p.categories) elem)
         AND s.id IS NULL
       ORDER BY c.cashback_rate DESC, a.quality_score DESC
       LIMIT 20

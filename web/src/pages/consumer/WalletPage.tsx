@@ -71,7 +71,7 @@ export function WalletPage() {
   const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions'],
     queryFn: async () => {
-      const res = await api.get('/transactions');
+      const res = await api.get('/wallet/transactions');
       return (res.data.data ?? []) as Transaction[];
     },
     refetchInterval: 5000,

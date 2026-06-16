@@ -6,9 +6,10 @@ import { ShoppingBag } from 'lucide-react';
 
 interface AdCard {
   campaign_id: string;
-  campaign_name: string;
-  brand_name: string;
+  product: string;
+  brand: string;
   cashback_rate: number;
+  estimated_cashback_rupees: number;
 }
 
 export function FeedPage() {
@@ -16,7 +17,7 @@ export function FeedPage() {
     queryKey: ['feed'],
     queryFn: async () => {
       const res = await api.get('/feed');
-      return (res.data.data ?? []) as AdCard[];
+      return (res.data.data?.ads ?? []) as AdCard[];
     },
     staleTime: 60_000,
   });
@@ -42,16 +43,16 @@ export function FeedPage() {
             <GlassCard key={ad.campaign_id} hover className="p-5 flex flex-col gap-3">
               <div className="flex items-start justify-between">
                 <div className="w-10 h-10 rounded-lg bg-white/[0.08] flex items-center justify-center text-slate-300 font-bold text-sm">
-                  {ad.brand_name.charAt(0)}
+                  {ad.brand.charAt(0)}
                 </div>
                 <StatusBadge status="active" />
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.7px] text-slate-500">
-                  {ad.brand_name}
+                  {ad.brand}
                 </p>
                 <p className="text-sm font-semibold text-slate-200 mt-0.5 leading-snug">
-                  {ad.campaign_name}
+                  {ad.product}
                 </p>
               </div>
               <div

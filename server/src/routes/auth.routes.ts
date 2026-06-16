@@ -2,7 +2,6 @@ import { Router } from 'express';
 import type { RequestHandler } from 'express';
 import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/authenticate';
-import { otpLimiter, otpVerifyLimiter } from '../middleware/rateLimiter';
 import { authService } from '../services/auth.service';
 import { requestOtpSchema, verifyOtpSchema, refreshTokenSchema } from '@adearn/shared';
 
@@ -11,7 +10,6 @@ const router = Router();
 // POST /auth/request-otp
 router.post(
   '/request-otp',
-  otpLimiter,
   validate(requestOtpSchema),
   (async (req, res, next) => {
     try {
@@ -26,7 +24,6 @@ router.post(
 // POST /auth/verify-otp
 router.post(
   '/verify-otp',
-  otpVerifyLimiter,
   validate(verifyOtpSchema),
   (async (req, res, next) => {
     try {

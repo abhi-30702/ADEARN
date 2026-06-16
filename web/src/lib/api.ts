@@ -55,7 +55,7 @@ export const getWallet = (): Promise<WalletData> =>
   api.get('/wallet').then((r) => r.data.data);
 
 export const getTransactions = (): Promise<CashbackTransaction[]> =>
-  api.get('/transactions').then((r) => r.data.data);
+  api.get('/wallet/transactions').then((r) => r.data.data);
 
 // Advertiser API
 

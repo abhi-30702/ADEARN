@@ -31,7 +31,7 @@ export function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await api.post('/auth/request-otp', { phone: phoneNum });
+      await api.post('/auth/request-otp', { mobile: phoneNum });
       setPhone(phoneNum);
       setStep('otp');
     } catch {
@@ -45,7 +45,7 @@ export function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await api.post('/auth/verify-otp', { phone, otp });
+      const res = await api.post('/auth/verify-otp', { mobile: phone, otp });
       const { user, access_token, refresh_token } = res.data.data as {
         user: { id: string; name: string; role: 'consumer' | 'advertiser' | 'admin'; kyc_status: string };
         access_token: string;

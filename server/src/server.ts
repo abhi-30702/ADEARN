@@ -20,9 +20,18 @@ import { startCharityDisbursementJob } from './jobs/charityDisbursement.job';
 async function start(): Promise<void> {
   const app = createApp();
 
-  // Redis uses lazyConnect: true — must be explicitly connected before the server
-  // begins accepting requests so rate limiters and idempotency checks are available.
-  await redis.connect();
+  // Connect Redis if not already connecting/connected (rate-limit-redis may
+  // trigger auto-connect via sendCommand before we reach this point).
+  if (redis.status === 'wait') {
+    await redis.connect();
+  } else {
+    // Already connecting — wait for the ready event
+    await new Promise<void>((resolve, reject) => {
+      if (redis.status === 'ready') return resolve();
+      redis.once('ready', resolve);
+      redis.once('error', reject);
+    });
+  }
 
   const server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Server started');
