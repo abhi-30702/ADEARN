@@ -1,0 +1,479 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { DollarSign, Shield, Users, Megaphone, TrendingUp, Activity } from 'lucide-react';
+import {
+  getFraudQueue,
+  resolveFraudCase,
+  getAdminUsers,
+  suspendUser,
+  getPendingAdvertisers,
+  approveAdvertiser,
+  getAdminFinancials,
+  type FraudQueueRow,
+  type AdminUserRow,
+  type PendingAdvertiserRow,
+  type AdminFinancials,
+} from '../../lib/api';
+import { AppLayout } from '../../components/AppLayout';
+import {
+  GlassCard,
+  KpiCard,
+  Button,
+  Skeleton,
+} from '../../components/ui';
+
+// ─── tab config ───────────────────────────────────────────────────────────────
+
+const TABS = [
+  { key: 'financials',  label: 'Financials',  icon: DollarSign },
+  { key: 'fraud',       label: 'Fraud Queue', icon: Shield     },
+  { key: 'users',       label: 'Users',       icon: Users      },
+  { key: 'advertisers', label: 'Advertisers', icon: Megaphone  },
+] as const;
+type Tab = typeof TABS[number]['key'];
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function formatCurrency(str: string): string {
+  return `₹${Number(str).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+// ─── shared table styles ──────────────────────────────────────────────────────
+
+const thClass =
+  'text-left py-3 px-4 text-[11px] font-semibold uppercase tracking-[0.7px] text-slate-400 whitespace-nowrap border-b border-white/[0.08]';
+const tdClass = 'py-3 px-4 text-slate-300 text-sm';
+const trClass = 'border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors duration-100';
+
+// ─── Tab: Financials ─────────────────────────────────────────────────────────
+
+function FinancialsTab() {
+  const { data, isLoading, isError } = useQuery<AdminFinancials>({
+    queryKey: ['admin-financials'],
+    queryFn: getAdminFinancials,
+    staleTime: 60_000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-28" />
+        ))}
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <GlassCard className="p-8 text-center">
+        <p className="text-red-400">Unable to load financials. Please try again later.</p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard
+          label="Total Cashback Paid"
+          value={formatCurrency(data.total_cashback_paid)}
+          icon={<DollarSign className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Under Review"
+          value={formatCurrency(data.total_under_review)}
+          icon={<Shield className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Total Liquid"
+          value={formatCurrency(data.total_liquid)}
+          icon={<TrendingUp className="w-5 h-5" />}
+        />
+        <KpiCard
+          label="Active Users"
+          value={data.active_users.toLocaleString('en-IN')}
+          icon={<Activity className="w-5 h-5" />}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <KpiCard label="Total Savings"      value={formatCurrency(data.total_savings)} />
+        <KpiCard label="Parent Fund Pending" value={formatCurrency(data.total_parent_pending)} />
+        <KpiCard label="Charity Pending"    value={formatCurrency(data.total_charity_pending)} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Tab: Fraud Queue ────────────────────────────────────────────────────────
+
+function FraudQueueTab() {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError } = useQuery<FraudQueueRow[]>({
+    queryKey: ['admin-fraud-queue'],
+    queryFn: getFraudQueue,
+    staleTime: 30_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (args: { id: string; approved: boolean }) =>
+      resolveFraudCase(args.id, args.approved),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['admin-fraud-queue'] }),
+  });
+
+  if (isLoading) {
+    return (
+      <GlassCard className="p-4 space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-10" />
+        ))}
+      </GlassCard>
+    );
+  }
+
+  if (isError) {
+    return (
+      <GlassCard className="p-8 text-center">
+        <p className="text-red-400">Unable to load fraud queue. Please try again later.</p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className={thClass}>User Mobile</th>
+              <th className={thClass}>Campaign</th>
+              <th className={`${thClass} text-right`}>Purchase</th>
+              <th className={`${thClass} text-right`}>Cashback</th>
+              <th className={`${thClass} text-right`}>Fraud Score</th>
+              <th className={`${thClass} text-right`}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!data || data.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-16 text-center text-slate-400">
+                  No transactions under review.
+                </td>
+              </tr>
+            ) : (
+              data.map((row) => {
+                const scoreNum = Number(row.fraud_score) * 100;
+                const scoreColor =
+                  scoreNum > 80
+                    ? 'text-red-400 font-semibold'
+                    : scoreNum > 50
+                      ? 'text-amber-400 font-semibold'
+                      : 'text-slate-300';
+                const isPending =
+                  mutation.isPending && mutation.variables?.id === row.id;
+
+                return (
+                  <tr key={row.id} className={trClass}>
+                    <td className={tdClass}>{row.user_mobile}</td>
+                    <td className={tdClass}>{row.campaign_name}</td>
+                    <td className={`${tdClass} text-right`}>
+                      {formatCurrency(row.purchase_amount)}
+                    </td>
+                    <td className={`${tdClass} text-right`}>
+                      {formatCurrency(row.cashback_amount)}
+                    </td>
+                    <td className={`${tdClass} text-right ${scoreColor}`}>
+                      {scoreNum.toFixed(0)}%
+                    </td>
+                    <td className={`${tdClass} text-right`}>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          loading={isPending}
+                          onClick={() => mutation.mutate({ id: row.id, approved: true })}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          loading={isPending}
+                          onClick={() => mutation.mutate({ id: row.id, approved: false })}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </GlassCard>
+  );
+}
+
+// ─── Tab: Users ───────────────────────────────────────────────────────────────
+
+function UsersTab() {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError } = useQuery<AdminUserRow[]>({
+    queryKey: ['admin-users'],
+    queryFn: getAdminUsers,
+    staleTime: 30_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (args: { id: string; suspended: boolean }) =>
+      suspendUser(args.id, args.suspended),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+  });
+
+  if (isLoading) {
+    return (
+      <GlassCard className="p-4 space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-10" />
+        ))}
+      </GlassCard>
+    );
+  }
+
+  if (isError) {
+    return (
+      <GlassCard className="p-8 text-center">
+        <p className="text-red-400">Unable to load users. Please try again later.</p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className={thClass}>Name</th>
+              <th className={thClass}>Mobile</th>
+              <th className={thClass}>Role</th>
+              <th className={thClass}>KYC</th>
+              <th className={`${thClass} text-right`}>Fraud Flags</th>
+              <th className={thClass}>Status</th>
+              <th className={`${thClass} text-right`}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!data || data.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-16 text-center text-slate-400">
+                  No users found.
+                </td>
+              </tr>
+            ) : (
+              data.map((row) => {
+                const isPending =
+                  mutation.isPending && mutation.variables?.id === row.id;
+
+                return (
+                  <tr key={row.id} className={trClass}>
+                    <td className={`${tdClass} font-medium text-slate-100`}>{row.name}</td>
+                    <td className={tdClass}>{row.mobile}</td>
+                    <td className={`${tdClass} capitalize`}>{row.role}</td>
+                    <td className={`${tdClass} capitalize`}>{row.kyc_status}</td>
+                    <td className={`${tdClass} text-right`}>{row.fraud_flags}</td>
+                    <td className={tdClass}>
+                      {row.is_active ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-400/10 text-red-400 border border-red-400/20">
+                          Suspended
+                        </span>
+                      )}
+                    </td>
+                    <td className={`${tdClass} text-right`}>
+                      {row.is_active ? (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          loading={isPending}
+                          onClick={() => mutation.mutate({ id: row.id, suspended: true })}
+                        >
+                          Suspend
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          loading={isPending}
+                          onClick={() => mutation.mutate({ id: row.id, suspended: false })}
+                        >
+                          Reinstate
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </GlassCard>
+  );
+}
+
+// ─── Tab: Advertisers ────────────────────────────────────────────────────────
+
+function AdvertisersTab() {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError } = useQuery<PendingAdvertiserRow[]>({
+    queryKey: ['admin-pending-advertisers'],
+    queryFn: getPendingAdvertisers,
+    staleTime: 30_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: (args: { id: string; approved: boolean }) =>
+      approveAdvertiser(args.id, args.approved),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['admin-pending-advertisers'] }),
+  });
+
+  if (isLoading) {
+    return (
+      <GlassCard className="p-4 space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-10" />
+        ))}
+      </GlassCard>
+    );
+  }
+
+  if (isError) {
+    return (
+      <GlassCard className="p-8 text-center">
+        <p className="text-red-400">Unable to load advertiser applications. Please try again later.</p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th className={thClass}>Company</th>
+              <th className={thClass}>Email</th>
+              <th className={`${thClass} text-right`}>Quality Score</th>
+              <th className={thClass}>Registered</th>
+              <th className={`${thClass} text-right`}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!data || data.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-16 text-center text-slate-400">
+                  No pending advertiser applications.
+                </td>
+              </tr>
+            ) : (
+              data.map((row) => {
+                const score = Number(row.quality_score);
+                const scoreDisplay = score > 0 ? score.toFixed(2) : '—';
+                const isPending =
+                  mutation.isPending && mutation.variables?.id === row.id;
+
+                return (
+                  <tr key={row.id} className={trClass}>
+                    <td className={`${tdClass} font-medium text-slate-100`}>{row.company_name}</td>
+                    <td className={tdClass}>{row.contact_email}</td>
+                    <td className={`${tdClass} text-right`}>{scoreDisplay}</td>
+                    <td className={tdClass}>{formatDate(row.created_at)}</td>
+                    <td className={`${tdClass} text-right`}>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          loading={isPending}
+                          onClick={() => mutation.mutate({ id: row.id, approved: true })}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          loading={isPending}
+                          onClick={() => mutation.mutate({ id: row.id, approved: false })}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </GlassCard>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export function AdminDashboardPage() {
+  const [activeTab, setActiveTab] = useState<Tab>('financials');
+
+  return (
+    <AppLayout title="Admin Dashboard">
+      {/* pill tab switcher */}
+      <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.08] w-fit mb-6">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={[
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+              activeTab === key
+                ? 'bg-teal-300/[0.15] text-teal-300 border border-teal-300/25'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.06]',
+            ].join(' ')}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* tab content */}
+      {activeTab === 'financials' && <FinancialsTab />}
+      {activeTab === 'fraud'      && <FraudQueueTab />}
+      {activeTab === 'users'      && <UsersTab />}
+      {activeTab === 'advertisers' && <AdvertisersTab />}
+    </AppLayout>
+  );
+}

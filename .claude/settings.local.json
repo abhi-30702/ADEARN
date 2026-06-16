@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api *)",
+      "Bash(ipconfig)",
+      "PowerShell(Start-Process -FilePath \"cmd.exe\" -ArgumentList \"/c cd /d D:\\\\SHIVANI_ADEARN\\\\web && npm run dev -- --host > C:\\\\Users\\\\abhi3\\\\AppData\\\\Local\\\\Temp\\\\vite-dev.log 2>&1\" -WindowStyle Hidden; Write-Host \"Vite restarting...\")",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)"
+    ]
+  }
+}

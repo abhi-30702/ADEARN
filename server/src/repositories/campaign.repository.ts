@@ -1,0 +1,93 @@
+import { db } from '../config/db';
+import type { Campaign } from '@adearn/shared';
+
+interface CampaignStats {
+  impressions: string;
+  conversions: string;
+  total_spend: string;
+  avg_cashback_paid: string;
+}
+
+export const campaignRepository = {
+  async findAdvertiserByUserId(userId: string): Promise<{ id: string; status: string } | null> {
+    const res = await db.query<{ id: string; status: string }>(
+      'SELECT id, status FROM advertisers WHERE user_id = $1',
+      [userId],
+    );
+    return res.rows[0] ?? null;
+  },
+
+  async create(
+    advertiserId: string,
+    data: {
+      name: string;
+      description?: string;
+      creative_url: string;
+      creative_type: string;
+      target_profile: object;
+      cashback_rate: number;
+      daily_cap: number;
+      total_budget: number;
+      starts_at?: string;
+      ends_at?: string;
+    },
+  ): Promise<Campaign> {
+    const res = await db.query<Campaign>(
+      `INSERT INTO campaigns
+         (advertiser_id, name, description, creative_url, creative_type,
+          target_profile, cashback_rate, daily_cap, total_budget,
+          starts_at, ends_at, status)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,'pending_review')
+       RETURNING *`,
+      [
+        advertiserId,
+        data.name,
+        data.description ?? null,
+        data.creative_url,
+        data.creative_type,
+        JSON.stringify(data.target_profile),
+        data.cashback_rate,
+        data.daily_cap,
+        data.total_budget,
+        data.starts_at ?? null,
+        data.ends_at ?? null,
+      ],
+    );
+    return res.rows[0];
+  },
+
+  async findByAdvertiserId(advertiserId: string): Promise<Campaign[]> {
+    const res = await db.query<Campaign>(
+      `SELECT * FROM campaigns WHERE advertiser_id = $1 ORDER BY created_at DESC`,
+      [advertiserId],
+    );
+    return res.rows;
+  },
+
+  async findById(campaignId: string): Promise<Campaign | null> {
+    const res = await db.query<Campaign>(
+      'SELECT * FROM campaigns WHERE id = $1',
+      [campaignId],
+    );
+    return res.rows[0] ?? null;
+  },
+
+  async getStats(campaignId: string): Promise<CampaignStats> {
+    const res = await db.query<CampaignStats>(
+      `
+      SELECT
+        COUNT(s.id)::text                                         AS impressions,
+        COUNT(t.id)::text                                         AS conversions,
+        COALESCE(SUM(t.cashback_amount), 0)::text                AS total_spend,
+        COALESCE(AVG(t.cashback_amount), 0)::text                AS avg_cashback_paid
+      FROM attribution_sessions s
+      LEFT JOIN cashback_transactions t
+        ON t.attribution_id = s.id
+       AND t.status = 'completed'
+      WHERE s.campaign_id = $1
+      `,
+      [campaignId],
+    );
+    return res.rows[0];
+  },
+};

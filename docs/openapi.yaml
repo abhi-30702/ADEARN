@@ -1,0 +1,2128 @@
+openapi: 3.0.3
+
+info:
+  title: AdEarn API
+  description: |
+    Intent-matched cashback advertising platform.
+    Users declare purchase intent, see matched ads, complete purchases,
+    and receive cashback split across 4 pools: liquid, savings, parent fund, charity.
+
+    ## Authentication
+    Most routes require a Bearer JWT (RS256). Obtain tokens via `POST /auth/verify-otp`.
+    The `role` claim in the JWT controls access:
+    - `consumer` — Feed, Attribution, Wallet, Reviews
+    - `advertiser` — Advertiser routes
+    - `admin` — Admin routes
+
+    ## Response Envelope
+    All responses follow:
+    ```json
+    { "success": true, "data": <T> }        // success
+    { "success": false, "error": { "code": "...", "message": "..." } }  // error
+    ```
+
+    ## Financial Invariants
+    1. Cashback distribution is always one atomic PostgreSQL transaction.
+    2. Advertiser billing happens only after cashback is committed.
+    3. Every webhook is idempotent — double-processing is architecturally impossible.
+  version: 1.0.0
+  contact:
+    name: Abhishek K
+    email: admin@adearn.in
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development
+  - url: https://adearn-api.railway.app/api/v1
+    description: Production (Railway)
+
+tags:
+  - name: Auth
+    description: OTP-based authentication — public endpoints
+  - name: Profile
+    description: Consumer purchase profile and cashback pool configuration
+  - name: Feed
+    description: Intent-matched ad feed for consumers
+  - name: Attribution
+    description: Attribution session lifecycle — start, pay, track
+  - name: Wallet
+    description: Consumer cashback pool balances and transaction ledger
+  - name: Reviews
+    description: Post-purchase ad quality reviews from consumers
+  - name: Advertiser
+    description: Advertiser onboarding, campaign management and analytics
+  - name: Admin
+    description: Platform administration — fraud queue, users, financials
+  - name: Webhooks
+    description: Stripe webhook handler (Stripe-Signature only — no bearer)
+  - name: Health
+    description: Platform health check (public)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 JWT with `role` claim (`consumer` | `advertiser` | `admin`)
+
+  schemas:
+    # ─── Envelope types ───────────────────────────────────────────────────────
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: UNAUTHORIZED
+            message:
+              type: string
+              example: Authentication required
+
+    # ─── Domain schemas ───────────────────────────────────────────────────────
+
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        name:
+          type: string
+          example: Mamaearth Vitamin C Serum
+        brand_name:
+          type: string
+          example: Mamaearth
+        cashback_rate:
+          type: string
+          description: Decimal string — e.g. "0.03" = 3%
+          example: "0.03"
+        creative_url:
+          type: string
+          format: uri
+          example: https://adearn-creatives-dev.s3.ap-south-1.amazonaws.com/mamaearth/serum.mp4
+        creative_type:
+          type: string
+          enum: [image, video]
+          example: video
+        categories:
+          type: array
+          items:
+            type: string
+          example: ["health", "beauty"]
+        budget_total:
+          type: string
+          description: Total campaign budget in INR (decimal string)
+          example: "50000.00"
+        spent_to_date:
+          type: string
+          description: Amount spent so far in INR (decimal string)
+          example: "1234.56"
+        status:
+          type: string
+          enum: [pending, active, paused, completed, rejected]
+          example: active
+        created_at:
+          type: string
+          format: date-time
+
+    CampaignCreate:
+      type: object
+      required:
+        - name
+        - brand_name
+        - cashback_rate
+        - budget_total
+        - categories
+        - creative_url
+        - creative_type
+      properties:
+        name:
+          type: string
+          example: Mamaearth Vitamin C Serum
+        brand_name:
+          type: string
+          example: Mamaearth
+        cashback_rate:
+          type: number
+          format: double
+          minimum: 0.01
+          maximum: 0.05
+          description: Cashback rate as a decimal (0.01–0.05)
+          example: 0.03
+        budget_total:
+          type: number
+          format: double
+          minimum: 1000
+          description: Total campaign budget in INR
+          example: 50000
+        categories:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          example: ["health", "beauty"]
+        creative_url:
+          type: string
+          format: uri
+          example: https://adearn-creatives-dev.s3.ap-south-1.amazonaws.com/mamaearth/serum.mp4
+        creative_type:
+          type: string
+          enum: [image, video]
+          example: video
+        target_age_min:
+          type: integer
+          example: 18
+        target_age_max:
+          type: integer
+          example: 45
+
+    CashbackTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        campaign_name:
+          type: string
+          example: Mamaearth Vitamin C Serum
+        brand_name:
+          type: string
+          example: Mamaearth
+        cashback_amount:
+          type: number
+          format: double
+          description: Cashback credited in INR
+          example: 44.97
+        purchase_amount:
+          type: number
+          format: double
+          description: Original purchase amount in INR
+          example: 1499
+        status:
+          type: string
+          enum: [completed, under_review, rejected]
+          example: completed
+
+    PoolBalances:
+      type: object
+      properties:
+        liquid_balance:
+          type: number
+          format: double
+          description: Withdrawable balance in INR
+          example: 17.99
+        savings_balance:
+          type: number
+          format: double
+          example: 13.49
+        parent_balance:
+          type: number
+          format: double
+          example: 8.99
+        charity_balance:
+          type: number
+          format: double
+          example: 4.50
+        total_earned:
+          type: number
+          format: double
+          description: Cumulative cashback earned (all pools combined)
+          example: 44.97
+
+    PoolConfig:
+      type: object
+      properties:
+        liquid_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 40
+        savings_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 30
+        parent_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 20
+        charity_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 10
+        charity_ngo_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: null
+
+    AttributionSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, converted, expired, fraud_review]
+          example: converted
+        expires_at:
+          type: string
+          format: date-time
+        cashback_amount:
+          type: number
+          format: double
+          nullable: true
+          example: 44.97
+        purchase_amount:
+          type: number
+          format: double
+          example: 1499
+        converted_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    FraudQueueRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        user_mobile:
+          type: string
+          example: "9876543210"
+        campaign_name:
+          type: string
+          example: Mamaearth Vitamin C Serum
+        purchase_amount:
+          type: string
+          description: Purchase amount in INR (decimal string)
+          example: "1499.00"
+        cashback_amount:
+          type: string
+          description: Cashback amount in INR (decimal string)
+          example: "44.97"
+        fraud_score:
+          type: string
+          description: Fraud score 0.0–1.0 (decimal string)
+          example: "0.85"
+        created_at:
+          type: string
+          format: date-time
+
+    AdminUserRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mobile:
+          type: string
+          example: "9876543210"
+        name:
+          type: string
+          example: Priya Sharma
+        role:
+          type: string
+          enum: [consumer, advertiser, admin]
+          example: consumer
+        kyc_status:
+          type: string
+          enum: [pending, verified, rejected]
+          example: verified
+        is_active:
+          type: boolean
+          example: true
+        fraud_flags:
+          type: integer
+          description: Number of fraud flags raised on this account
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+
+    PendingAdvertiserRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_name:
+          type: string
+          example: Mamaearth Pvt Ltd
+        gst_number:
+          type: string
+          example: 27AADCB2230M1ZT
+        contact_email:
+          type: string
+          format: email
+          example: ads@mamaearth.in
+        contact_mobile:
+          type: string
+          example: "9123456789"
+        pledge_signed:
+          type: boolean
+          example: true
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        created_at:
+          type: string
+          format: date-time
+
+    FinancialSummary:
+      type: object
+      properties:
+        total_cashback_paid:
+          type: string
+          description: Total cashback paid out in INR (decimal string)
+          example: "128450.00"
+        total_under_review:
+          type: string
+          description: Cashback currently under fraud review (decimal string)
+          example: "3200.00"
+        total_liquid:
+          type: string
+          description: Aggregate liquid pool balance across all users (decimal string)
+          example: "51380.00"
+        total_savings:
+          type: string
+          description: Aggregate savings pool balance (decimal string)
+          example: "38535.00"
+        total_parent_pending:
+          type: string
+          description: Aggregate parent fund balance awaiting disbursement (decimal string)
+          example: "25690.00"
+        total_charity_pending:
+          type: string
+          description: Aggregate charity pool balance awaiting disbursement (decimal string)
+          example: "12845.00"
+        active_users:
+          type: integer
+          description: Number of users with at least one conversion
+          example: 342
+
+    AuditLogRow:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+          nullable: true
+        actor_mobile:
+          type: string
+          nullable: true
+          example: "9000000000"
+        action:
+          type: string
+          example: FRAUD_APPROVE
+        entity_type:
+          type: string
+          example: cashback_transaction
+        entity_id:
+          type: string
+          nullable: true
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        before_state:
+          type: object
+          nullable: true
+          additionalProperties: true
+        after_state:
+          type: object
+          nullable: true
+          additionalProperties: true
+        ip_address:
+          type: string
+          nullable: true
+          example: 203.0.113.42
+        created_at:
+          type: string
+          format: date-time
+
+    CharityDisbursement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ngo_name:
+          type: string
+          example: GiveIndia Foundation
+        amount:
+          type: string
+          description: Amount disbursed in INR (decimal string)
+          example: "5200.00"
+        disbursed_at:
+          type: string
+          format: date-time
+        transaction_reference:
+          type: string
+          example: NEFT_20260115_0042
+        month:
+          type: string
+          description: Disbursement period (YYYY-MM)
+          example: "2026-01"
+
+    CampaignStats:
+      type: object
+      properties:
+        campaign:
+          $ref: '#/components/schemas/Campaign'
+        conversions_count:
+          type: integer
+          example: 14
+        total_spent:
+          type: string
+          description: Total cashback paid by advertiser (decimal string)
+          example: "629.58"
+        avg_cashback:
+          type: string
+          description: Average cashback per conversion (decimal string)
+          example: "44.97"
+        recent_conversions:
+          type: array
+          items:
+            type: object
+            properties:
+              converted_at:
+                type: string
+                format: date-time
+              purchase_amount:
+                type: string
+              cashback_amount:
+                type: string
+
+    AdvertiserAnalytics:
+      type: object
+      properties:
+        total_campaigns:
+          type: integer
+          example: 3
+        active_campaigns:
+          type: integer
+          example: 1
+        total_spent:
+          type: string
+          description: Total spend across all campaigns (decimal string)
+          example: "1847.43"
+        total_conversions:
+          type: integer
+          example: 41
+        avg_conversion_rate:
+          type: string
+          description: Average conversion rate as percentage string
+          example: "6.20"
+
+    AdReview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        transaction_id:
+          type: string
+          format: uuid
+        relevance_score:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        honesty_score:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        value_score:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        composite_score:
+          type: number
+          format: double
+          description: Weighted composite score 0–5
+          example: 5.0
+
+    HealthResponse:
+      type: object
+      required: [status, version, db, redis, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          example: ok
+        version:
+          type: string
+          example: 1.0.0
+        db:
+          type: string
+          enum: [ok, error]
+          example: ok
+        redis:
+          type: string
+          enum: [ok, error]
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+
+  # ─── Reusable responses ──────────────────────────────────────────────────
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: Authentication required
+
+    Forbidden:
+      description: Insufficient role — valid JWT but wrong role
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: FORBIDDEN
+              message: Admin role required
+
+    UnprocessableEntity:
+      description: Validation error — request body or query params invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: VALIDATION_ERROR
+              message: "liquid_pct + savings_pct + parent_pct + charity_pct must equal 100"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: NOT_FOUND
+              message: Resource not found
+
+# ─── Paths ──────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Health ──────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Platform health check
+      description: Returns DB and Redis connectivity status. Always public.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Health status (ok or degraded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                version: 1.0.0
+                db: ok
+                redis: ok
+                timestamp: "2026-06-14T10:00:00.000Z"
+
+  # ── Auth ─────────────────────────────────────────────────────────────────
+
+  /auth/request-otp:
+    post:
+      tags: [Auth]
+      summary: Request OTP
+      description: |
+        Sends a 6-digit OTP to the supplied mobile number.
+        In development (`OTP_MOCK=true`) the OTP is always `123456` — no SMS sent.
+        Rate limited: 3 requests per 10 minutes per mobile.
+      operationId: requestOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mobile]
+              properties:
+                mobile:
+                  type: string
+                  pattern: '^[6-9]\d{9}$'
+                  description: 10-digit Indian mobile number
+                  example: "9876543210"
+      responses:
+        '200':
+          description: OTP dispatched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+              example:
+                success: true
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: RATE_LIMIT_EXCEEDED
+                  message: Too many OTP requests. Try again in 10 minutes.
+
+  /auth/verify-otp:
+    post:
+      tags: [Auth]
+      summary: Verify OTP and obtain tokens
+      description: |
+        Verifies the OTP and returns JWT access + refresh tokens.
+        Creates a new user account on first login.
+        Rate limited: 5 attempts per 5 minutes per mobile.
+      operationId: verifyOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mobile, otp]
+              properties:
+                mobile:
+                  type: string
+                  pattern: '^[6-9]\d{9}$'
+                  example: "9876543210"
+                otp:
+                  type: string
+                  minLength: 6
+                  maxLength: 6
+                  example: "123456"
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                        description: RS256 JWT — expires in 24h
+                        example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+                      refresh_token:
+                        type: string
+                        example: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          name:
+                            type: string
+                            nullable: true
+                            example: Priya Sharma
+                          role:
+                            type: string
+                            enum: [consumer, advertiser, admin]
+                            example: consumer
+        '401':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVALID_OTP
+                  message: OTP is incorrect or has expired
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Profile ──────────────────────────────────────────────────────────────
+
+  /profile:
+    get:
+      tags: [Profile]
+      summary: Get consumer profile
+      description: Returns the authenticated consumer's profile including purchase categories and pool configuration.
+      operationId: getProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Consumer profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      mobile:
+                        type: string
+                        example: "9876543210"
+                      name:
+                        type: string
+                        nullable: true
+                        example: Priya Sharma
+                      kyc_status:
+                        type: string
+                        enum: [pending, verified, rejected]
+                        example: verified
+                      purchase_categories:
+                        type: array
+                        items:
+                          type: string
+                        example: ["health", "beauty"]
+                      pool_config:
+                        $ref: '#/components/schemas/PoolConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags: [Profile]
+      summary: Update purchase profile categories
+      description: Updates the consumer's declared purchase interest categories used for ad intent-matching.
+      operationId: updateProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categories]
+              properties:
+                categories:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  example: ["health", "beauty", "electronics"]
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: boolean
+                        example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /pool-config:
+    get:
+      tags: [Profile]
+      summary: Get cashback pool configuration
+      description: Returns the consumer's cashback split percentages across the 4 pools.
+      operationId: getPoolConfig
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pool configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/PoolConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags: [Profile]
+      summary: Update cashback pool configuration
+      description: |
+        Updates the 4-pool cashback split.
+        All four percentages must sum to exactly 100.
+        Uses integer arithmetic in paise — no floats.
+      operationId: updatePoolConfig
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [liquid_pct, savings_pct, parent_pct, charity_pct]
+              properties:
+                liquid_pct:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  example: 40
+                savings_pct:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  example: 30
+                parent_pct:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  example: 20
+                charity_pct:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  example: 10
+      responses:
+        '200':
+          description: Pool configuration updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: boolean
+                        example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  # ── Feed ─────────────────────────────────────────────────────────────────
+
+  /feed:
+    get:
+      tags: [Feed]
+      summary: Get intent-matched ad feed
+      description: |
+        Returns campaigns matched to the consumer's declared purchase categories
+        via JSONB overlap query.
+        Excludes: ads seen within 48h, over-budget campaigns, non-active campaigns.
+      operationId: getFeed
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of matched campaigns
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Campaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /feed/{id}/view:
+    post:
+      tags: [Feed]
+      summary: Record ad view
+      description: Records that the consumer has viewed an ad. Used for the 48-hour deduplication window.
+      operationId: recordAdView
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Campaign ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: View recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      recorded:
+                        type: boolean
+                        example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Attribution ──────────────────────────────────────────────────────────
+
+  /attribution/start:
+    post:
+      tags: [Attribution]
+      summary: Start attribution session
+      description: |
+        Creates an attribution session linking the consumer to a campaign purchase.
+        Session expires after `ATTRIBUTION_WINDOW_HOURS` (default 24h).
+        `SELECT FOR UPDATE` prevents race conditions on concurrent webhooks.
+      operationId: startAttribution
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [campaign_id, purchase_amount]
+              properties:
+                campaign_id:
+                  type: string
+                  format: uuid
+                  example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                purchase_amount:
+                  type: number
+                  format: double
+                  minimum: 1
+                  description: Purchase amount in INR
+                  example: 1499
+      responses:
+        '200':
+          description: Attribution session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      session_id:
+                        type: string
+                        format: uuid
+                      expires_at:
+                        type: string
+                        format: date-time
+                      cashback_rate:
+                        type: string
+                        description: Cashback rate as decimal string
+                        example: "0.03"
+                      estimated_cashback:
+                        type: number
+                        format: double
+                        description: Estimated cashback in INR
+                        example: 44.97
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Campaign not found or not active
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /attribution/{id}/pay:
+    post:
+      tags: [Attribution]
+      summary: Create Stripe PaymentIntent for attribution
+      description: |
+        Creates a Stripe PaymentIntent for the attributed purchase.
+        Returns the `client_secret` for frontend Stripe Elements confirmation.
+      operationId: createPaymentIntent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Attribution session ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Stripe PaymentIntent created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      client_secret:
+                        type: string
+                        description: Stripe PaymentIntent client secret for frontend confirmation
+                        example: pi_3NxYZ2LkdIwHu7ix0KBJoB0r_secret_abc123
+                      payment_intent_id:
+                        type: string
+                        example: pi_3NxYZ2LkdIwHu7ix0KBJoB0r
+                      publishable_key:
+                        type: string
+                        description: Stripe publishable key (pk_test_...)
+                        example: pk_test_51NxYZ2LkdIwHu7ix...
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Session expired or already converted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: SESSION_EXPIRED
+                  message: Attribution session has expired
+
+  /attribution/{id}:
+    get:
+      tags: [Attribution]
+      summary: Get attribution session status
+      description: Returns the current state of an attribution session including cashback amount if converted.
+      operationId: getAttribution
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Attribution session ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Attribution session details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AttributionSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /attribution/{id}/payment-link:
+    get:
+      tags: [Attribution]
+      summary: Get Stripe Payment Link for in-store QR flow
+      description: |
+        Returns a Stripe Payment Link URL for the in-store QR payment flow.
+        The URL can be embedded in a QR code displayed at physical retail.
+      operationId: getPaymentLink
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Attribution session ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Stripe Payment Link URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        format: uri
+                        example: https://buy.stripe.com/test_abc123xyz
+                      session_id:
+                        type: string
+                        format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Wallet ───────────────────────────────────────────────────────────────
+
+  /wallet:
+    get:
+      tags: [Wallet]
+      summary: Get cashback pool balances
+      description: |
+        Returns the consumer's current balances across all 4 cashback pools
+        plus total_earned lifetime figure.
+        `withdrawal_eligible` is true when liquid_balance ≥ ₹50.
+      operationId: getWallet
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Wallet pool balances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      pool_balances:
+                        $ref: '#/components/schemas/PoolBalances'
+                      withdrawal_eligible:
+                        type: boolean
+                        example: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /transactions:
+    get:
+      tags: [Wallet]
+      summary: Get cashback transaction ledger
+      description: Returns a paginated list of the consumer's cashback transactions, most recent first.
+      operationId: getTransactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of cashback transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CashbackTransaction'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Reviews ──────────────────────────────────────────────────────────────
+
+  /reviews:
+    post:
+      tags: [Reviews]
+      summary: Submit post-purchase ad review
+      description: |
+        Submits a consumer's 3-dimension review of an ad (relevance, honesty, value — each 1–5).
+        Feeds into the advertiser's 30-day rolling quality score engine.
+        One review per cashback transaction.
+      operationId: createReview
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transaction_id, relevance_score, honesty_score, value_score]
+              properties:
+                transaction_id:
+                  type: string
+                  format: uuid
+                  description: Cashback transaction to review
+                relevance_score:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  example: 5
+                honesty_score:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  example: 5
+                value_score:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  example: 5
+      responses:
+        '201':
+          description: Review submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AdReview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Review already submitted for this transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: DUPLICATE_REVIEW
+                  message: A review has already been submitted for this transaction
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  # ── Advertiser ───────────────────────────────────────────────────────────
+
+  /advertiser/onboard:
+    post:
+      tags: [Advertiser]
+      summary: Onboard new advertiser
+      description: |
+        Registers a new advertiser account. Requires `pledge_signed: true` — the advertiser
+        pledges to pay only on confirmed purchases (performance model).
+        Account is placed in `pending` status until admin approval.
+      operationId: onboardAdvertiser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [company_name, gst_number, contact_email, contact_mobile, pledge_signed]
+              properties:
+                company_name:
+                  type: string
+                  example: Mamaearth Pvt Ltd
+                gst_number:
+                  type: string
+                  pattern: '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$'
+                  example: 27AADCB2230M1ZT
+                contact_email:
+                  type: string
+                  format: email
+                  example: ads@mamaearth.in
+                contact_mobile:
+                  type: string
+                  pattern: '^[6-9]\d{9}$'
+                  example: "9123456789"
+                pledge_signed:
+                  type: boolean
+                  description: Must be true — advertiser pledges performance billing model
+                  example: true
+      responses:
+        '201':
+          description: Advertiser onboarded — pending admin approval
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      advertiser_id:
+                        type: string
+                        format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Advertiser already registered for this mobile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /advertiser/campaigns:
+    post:
+      tags: [Advertiser]
+      summary: Create campaign
+      description: Creates a new ad campaign. Campaign enters `pending` status until admin reviews it.
+      operationId: createCampaign
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignCreate'
+      responses:
+        '201':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Campaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+    get:
+      tags: [Advertiser]
+      summary: List advertiser's campaigns
+      description: Returns all campaigns belonging to the authenticated advertiser.
+      operationId: listCampaigns
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Campaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /advertiser/campaigns/{id}/stats:
+    get:
+      tags: [Advertiser]
+      summary: Get campaign performance stats
+      description: Returns detailed conversion statistics for a single campaign.
+      operationId: getCampaignStats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Campaign ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Campaign statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CampaignStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /advertiser/analytics:
+    get:
+      tags: [Advertiser]
+      summary: Get aggregate advertiser analytics
+      description: |
+        Returns aggregate performance metrics across all campaigns for the advertiser.
+        Supports CSV/PDF export via the `format` query parameter.
+      operationId: getAdvertiserAnalytics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          description: Response format — omit for JSON, use `csv` or `pdf` for export
+          schema:
+            type: string
+            enum: [json, csv, pdf]
+            default: json
+        - name: from
+          in: query
+          description: Start date filter (ISO 8601)
+          schema:
+            type: string
+            format: date
+            example: "2026-01-01"
+        - name: to
+          in: query
+          description: End date filter (ISO 8601)
+          schema:
+            type: string
+            format: date
+            example: "2026-06-30"
+      responses:
+        '200':
+          description: Advertiser analytics summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/AdvertiserAnalytics'
+            text/csv:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Admin ─────────────────────────────────────────────────────────────────
+
+  /admin/fraud-queue:
+    get:
+      tags: [Admin]
+      summary: List fraud review queue
+      description: Returns cashback transactions flagged for fraud review (score > 0.8 threshold).
+      operationId: getFraudQueue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Fraud queue entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FraudQueueRow'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/fraud-queue/{id}/approve:
+    put:
+      tags: [Admin]
+      summary: Approve or reject a fraud queue entry
+      description: |
+        Approves (`approved: true`) or rejects (`approved: false`) a flagged cashback.
+        Approval releases the cashback to the consumer's pools.
+        Rejection reverses the cashback and credits the advertiser.
+        All actions written to the audit log.
+      operationId: resolveFraudQueueEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Fraud queue entry ID (cashback transaction ID)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approved]
+              properties:
+                approved:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Fraud queue entry resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      approved:
+                        type: boolean
+                        example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List all users
+      description: Returns paginated user list for admin management. Supports role and status filters.
+      operationId: adminListUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [consumer, advertiser, admin]
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUserRow'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{id}/suspend:
+    put:
+      tags: [Admin]
+      summary: Suspend or reinstate a user
+      description: |
+        Sets `is_active = false` (suspend) or `true` (reinstate).
+        Suspended users cannot log in or trigger new cashback.
+        Action written to audit log.
+      operationId: suspendUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suspended]
+              properties:
+                suspended:
+                  type: boolean
+                  description: true = suspend, false = reinstate
+                  example: true
+      responses:
+        '200':
+          description: User suspension status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      suspended:
+                        type: boolean
+                        example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/advertisers:
+    get:
+      tags: [Admin]
+      summary: List pending advertiser applications
+      description: Returns advertiser accounts awaiting admin approval.
+      operationId: adminListAdvertisers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+            default: pending
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Advertiser application list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PendingAdvertiserRow'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/advertisers/{id}/approve:
+    put:
+      tags: [Admin]
+      summary: Approve or reject advertiser application
+      description: |
+        Approves (`approved: true`) or rejects (`approved: false`) an advertiser application.
+        Approved advertisers can create campaigns immediately.
+        Action written to audit log.
+      operationId: approveAdvertiser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Advertiser ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approved]
+              properties:
+                approved:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Advertiser application resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      approved:
+                        type: boolean
+                        example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /admin/financials:
+    get:
+      tags: [Admin]
+      summary: Get platform financial summary
+      description: Returns aggregate financial metrics across all pools, users and cashback status categories.
+      operationId: getFinancials
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Financial summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/FinancialSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/audit-log:
+    get:
+      tags: [Admin]
+      summary: Get audit log
+      description: |
+        Returns a filterable audit trail of all admin actions (fraud approvals,
+        user suspensions, advertiser approvals, etc.).
+      operationId: getAuditLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: action
+          in: query
+          description: Filter by action type (e.g. FRAUD_APPROVE, USER_SUSPEND)
+          schema:
+            type: string
+            example: FRAUD_APPROVE
+        - name: entity_type
+          in: query
+          description: Filter by entity type (e.g. cashback_transaction, user)
+          schema:
+            type: string
+            example: cashback_transaction
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLogRow'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/charity-ledger:
+    get:
+      tags: [Admin]
+      summary: Get public charity disbursement ledger
+      description: |
+        Returns the public record of all charity pool disbursements to NGOs.
+        **This endpoint is public — no authentication required.**
+        Disbursements run on the 15th of each month via `charityDisbursement.job.ts`.
+      operationId: getCharityLedger
+      responses:
+        '200':
+          description: Charity disbursement ledger
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CharityDisbursement'
+
+  # ── Webhooks ─────────────────────────────────────────────────────────────
+
+  /webhooks/stripe:
+    post:
+      tags: [Webhooks]
+      summary: Stripe webhook handler
+      description: |
+        Receives Stripe events — primarily `payment_intent.succeeded`.
+
+        **Security:** Validated via `Stripe-Signature` header using
+        `stripe.webhooks.constructEvent()`. No Bearer JWT.
+
+        **CRITICAL implementation notes:**
+        - Route registered BEFORE `express.json()` — uses `express.raw({ type: 'application/json' })`
+        - Returns HTTP 200 immediately; cashback processing runs asynchronously
+        - Redis `SETNX` idempotency guard prevents double-processing
+        - Fraud score > 0.8 → cashback queued for admin review instead of auto-commit
+
+        **Cashback flow on `payment_intent.succeeded`:**
+        1. Verify Stripe signature
+        2. Return 200 immediately
+        3. Redis SETNX — skip if already processed
+        4. SELECT attribution session FOR UPDATE — skip if expired
+        5. fraudDetection.score() — queue if > 0.8
+        6. cashbackEngine.processCashback() — atomic 5-write transaction
+        7. setImmediate: FCM + email + advertiser webhook notifications
+      operationId: stripeWebhook
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          description: HMAC signature from Stripe for payload verification
+          schema:
+            type: string
+            example: t=1492774577,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a05bd539082b9b5dc7b6b38
+      requestBody:
+        required: true
+        description: Raw Stripe event payload (must NOT be JSON-parsed before signature check)
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Stripe Event object
+              properties:
+                id:
+                  type: string
+                  example: evt_3NxYZ2LkdIwHu7ix0KBJoB0r
+                type:
+                  type: string
+                  example: payment_intent.succeeded
+                data:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Webhook received — processing continues asynchronously
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                    example: true
+              example:
+                received: true
+        '400':
+          description: Invalid Stripe signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVALID_SIGNATURE
+                  message: Stripe webhook signature verification failed

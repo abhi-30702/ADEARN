@@ -1,0 +1,145 @@
+import { Router } from 'express';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
+import { z } from 'zod';
+import { authenticate } from '../middleware/authenticate';
+import { attributionService } from '../services/attribution.service';
+import { AppError } from '../lib/AppError';
+
+const router = Router();
+router.use(authenticate);
+
+const startSessionSchema = z.object({
+  campaign_id: z.string().uuid('campaign_id must be a valid UUID'),
+  purchase_amount: z.number({ invalid_type_error: 'purchase_amount must be a number' }).positive('purchase_amount must be positive'),
+});
+
+// POST /attribution/start
+// Body: { campaign_id: string (UUID), purchase_amount: number (positive) }
+// Response: { success: true, data: { session_id, expires_at, cashback_rate, estimated_cashback } }
+router.post(
+  '/start',
+  (async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        next(AppError.unauthorized());
+        return;
+      }
+
+      const parsed = startSessionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const fieldErrors = parsed.error.flatten().fieldErrors;
+        next(AppError.validation('Invalid request body', fieldErrors));
+        return;
+      }
+
+      const { campaign_id, purchase_amount } = parsed.data;
+
+      const data = await attributionService.startSession(
+        req.user.sub,
+        campaign_id,
+        purchase_amount,
+      );
+
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+// POST /attribution/:id/pay
+// Creates a Stripe PaymentIntent for the given attribution session.
+// Response: { success: true, data: { client_secret, payment_intent_id, publishable_key } }
+router.post(
+  '/:id/pay',
+  (async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        next(AppError.unauthorized());
+        return;
+      }
+
+      const idParse = z.string().uuid().safeParse(req.params.id);
+      if (!idParse.success) {
+        res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid session ID' } });
+        return;
+      }
+      const sessionId = idParse.data;
+
+      const data = await attributionService.createPaymentIntent(req.user.sub, sessionId, req.ip ?? '');
+
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+// GET /attribution/:id
+// Response: { success: true, data: { id, status, expires_at, cashback_amount, purchase_amount, converted_at } }
+router.get(
+  '/:id',
+  (async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        next(AppError.unauthorized());
+        return;
+      }
+
+      const idParse = z.string().uuid().safeParse(req.params.id);
+      if (!idParse.success) {
+        res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid session ID' } });
+        return;
+      }
+      const sessionId = idParse.data;
+
+      const session = await attributionService.getSession(req.user.sub, sessionId);
+
+      res.json({
+        success: true,
+        data: {
+          id: session.id,
+          status: session.status,
+          expires_at: session.expires_at,
+          cashback_amount: session.cashback_amount !== null ? Number(session.cashback_amount) : null,
+          purchase_amount: session.purchase_amount !== null ? Number(session.purchase_amount) : null,
+          converted_at: session.converted_at,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+// GET /attribution/:id/payment-link
+// Returns a deep-link URL for QR code generation (in-store flow).
+// Response: { success: true, data: { url: "adearn://checkout?session_id=<id>&amount=<amount>" } }
+router.get(
+  '/:id/payment-link',
+  (async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+    try {
+      if (!req.user) {
+        next(AppError.unauthorized());
+        return;
+      }
+
+      const idParse = z.string().uuid().safeParse(req.params.id);
+      if (!idParse.success) {
+        res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid session ID' } });
+        return;
+      }
+      const sessionId = idParse.data;
+
+      const session = await attributionService.getSession(req.user.sub, sessionId);
+      const url = `adearn://checkout?session_id=${session.id}&amount=${session.purchase_amount}`;
+
+      res.json({ success: true, data: { url, session_id: session.id } });
+    } catch (err) {
+      next(err);
+    }
+  }) as RequestHandler,
+);
+
+export default router;
+
