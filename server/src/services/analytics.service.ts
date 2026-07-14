@@ -1,5 +1,6 @@
 import { logger } from '../config/logger';
 import { analyticsRepository } from '../repositories/analytics.repository';
+import { cashbackEngine } from './cashbackEngine.service';
 import type {
   AdvertiserStats,
   FinancialSummary,
@@ -36,12 +37,18 @@ export const analyticsService = {
 
   /**
    * Approve or reject a fraud-flagged transaction.
-   * approve=true → status 'completed', approve=false → status 'rejected'.
+   * approve=true  → status 'completed', money was already credited, nothing to reverse.
+   * approve=false → status 'rejected', AND the pool_balances credit + campaign spend
+   *                 from the original (unconditional) cashback write are reversed
+   *                 atomically — see cashbackEngine.rejectFraudulentCashback.
    */
-  async resolveFraudCase(txId: string, approve: boolean): Promise<void> {
-    const status = approve ? 'completed' : 'rejected';
-    logger.info({ txId, status }, 'analyticsService.resolveFraudCase');
-    await analyticsRepository.updateTransactionStatus(txId, status);
+  async resolveFraudCase(txId: string, approve: boolean, adminUserId: string): Promise<void> {
+    logger.info({ txId, approve }, 'analyticsService.resolveFraudCase');
+    if (approve) {
+      await analyticsRepository.updateTransactionStatus(txId, 'completed');
+    } else {
+      await cashbackEngine.rejectFraudulentCashback(txId, adminUserId);
+    }
   },
 
   // ─── Admin helpers (delegated to analyticsRepository) ─────────────────────
