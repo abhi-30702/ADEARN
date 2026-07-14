@@ -12,12 +12,6 @@ const ROLE_HOME: Record<string, string> = {
   admin: '/admin',
 };
 
-const DEMO_ACCOUNTS = [
-  { label: 'Consumer',   phone: '9876543210', color: 'bg-teal-300/10 text-teal-300 border-teal-300/25 hover:bg-teal-300/20' },
-  { label: 'Advertiser', phone: '9123456789', color: 'bg-[#FFD2C2]/10 text-[#FFD2C2] border-[#FFD2C2]/25 hover:bg-[#FFD2C2]/20' },
-  { label: 'Admin',      phone: '9000000000', color: 'bg-blue-400/10 text-blue-400 border-blue-400/25 hover:bg-blue-400/20' },
-];
-
 export function LoginPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
@@ -80,7 +74,7 @@ export function LoginPage() {
         to: ROLE_HOME[user.role] ?? '/feed',
       });
     } catch {
-      setError('Invalid OTP. Try 123456 for demo accounts.');
+      setError('Invalid OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -88,11 +82,6 @@ export function LoginPage() {
 
   const verifyOtpHandler = async () => {
     await verifyOtp();
-  };
-
-  const quickLogin = async (demoPhone: string) => {
-    await requestOtp(demoPhone);
-    setOtp('123456');
   };
 
   return (
@@ -178,28 +167,6 @@ export function LoginPage() {
                 >
                   Send OTP
                 </Button>
-              </div>
-
-              {/* Demo accounts */}
-              <div
-                className="mt-6 pt-5"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.7px] text-slate-500 mb-3">
-                  Demo Accounts
-                </p>
-                <div className="flex gap-2">
-                  {DEMO_ACCOUNTS.map((acc) => (
-                    <button
-                      key={acc.label}
-                      onClick={() => quickLogin(acc.phone)}
-                      disabled={loading}
-                      className={`flex-1 py-2 px-3 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${acc.color}`}
-                    >
-                      {acc.label}
-                    </button>
-                  ))}
-                </div>
               </div>
             </>
           ) : (
