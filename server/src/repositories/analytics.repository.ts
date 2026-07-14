@@ -182,17 +182,16 @@ export const analyticsRepository = {
   },
 
   /**
-   * Approve or reject a fraud-flagged transaction.
-   * status: 'completed' → approved, 'rejected' → rejected.
+   * Approve a fraud-flagged transaction — the money was already credited when the
+   * transaction was first processed, so this just confirms it as legitimate.
+   * Rejection goes through cashbackEngine.rejectFraudulentCashback instead, since
+   * it must also reverse the pool_balances credit and campaign spend atomically.
    */
-  async updateTransactionStatus(
-    txId: string,
-    status: 'completed' | 'rejected',
-  ): Promise<void> {
+  async updateTransactionStatus(txId: string, status: 'completed'): Promise<void> {
     await db.query(
       `UPDATE cashback_transactions
-       SET status       = $2,
-           completed_at = CASE WHEN $2 = 'completed' THEN NOW() ELSE completed_at END
+       SET status       = $2::text,
+           completed_at = NOW()
        WHERE id = $1`,
       [txId, status],
     );

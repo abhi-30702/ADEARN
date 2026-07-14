@@ -53,9 +53,13 @@ router.put(
   '/fraud-queue/:id/approve',
   (async (req, res, next) => {
     try {
+      if (!req.user) {
+        next(new Error('Unauthorized'));
+        return;
+      }
       const txId = req.params['id'] as string;
       const approved: boolean = Boolean(req.body.approved);
-      await analyticsService.resolveFraudCase(txId, approved);
+      await analyticsService.resolveFraudCase(txId, approved, req.user.sub);
       res.json({ success: true, data: { id: txId, approved } });
     } catch (err) {
       next(err);

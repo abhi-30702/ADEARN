@@ -232,4 +232,72 @@ export const cashbackEngine = {
       throw err;
     }
   },
+
+  /**
+   * Reject a fraud-flagged cashback transaction: reverse the pool_balances credit
+   * and campaign spend that were committed when the transaction was first processed
+   * (cashback_transactions is written unconditionally regardless of fraud status —
+   * only the admin's later approve/reject decision determines whether the money
+   * should actually stay). Atomic 3-write transaction, mirrors processCashback's
+   * discipline: SELECT FOR UPDATE lock, decrement pool_balances, decrement
+   * campaigns.spent_to_date, set status='rejected', audit log — or full ROLLBACK.
+   *
+   * No-ops (throws) if the transaction isn't currently 'under_review' — approving
+   * or rejecting an already-resolved transaction, or one that was never flagged,
+   * is not a valid reversal target.
+   */
+  async rejectFraudulentCashback(txId: string, adminUserId: string): Promise<void> {
+    const client = await db.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const tx = await cashbackRepository.lockTransactionForResolution(client, txId);
+
+      if (!tx) {
+        throw AppError.notFound('Cashback transaction not found');
+      }
+
+      if (tx.status !== 'under_review') {
+        throw AppError.conflict('Transaction is not pending fraud review');
+      }
+
+      await cashbackRepository.decrementPoolBalances(client, {
+        userId: tx.userId,
+        cashbackAmount: tx.cashbackAmount,
+        liquidAmount: tx.liquidAmount,
+        savingsAmount: tx.savingsAmount,
+        parentAmount: tx.parentAmount,
+        charityAmount: tx.charityAmount,
+      });
+
+      await cashbackRepository.decrementCampaignSpend(client, tx.campaignId, tx.cashbackAmount);
+
+      await cashbackRepository.setTransactionStatus(client, txId, 'rejected');
+
+      await cashbackRepository.insertAuditLog(client, {
+        actorId: adminUserId,
+        action: 'fraud_case_rejected',
+        entityType: 'cashback_transaction',
+        entityId: txId,
+        afterState: { cashbackAmount: tx.cashbackAmount, status: 'rejected' },
+      });
+
+      await client.query('COMMIT');
+      client.release();
+
+      logger.info(
+        { txId, userId: tx.userId, reversedAmount: tx.cashbackAmount },
+        'Fraud case rejected — cashback reversed',
+      );
+    } catch (err) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // ignore rollback errors — original error is more important
+      }
+      client.release();
+      throw err;
+    }
+  },
 };

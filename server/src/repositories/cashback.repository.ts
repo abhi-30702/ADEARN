@@ -33,6 +33,17 @@ export interface InsertAuditLogData {
   ipAddress?: string;
 }
 
+export interface CashbackTransactionForReversal {
+  userId: string;
+  campaignId: string;
+  status: string;
+  cashbackAmount: number;  // rupees
+  liquidAmount: number;    // rupees
+  savingsAmount: number;   // rupees
+  parentAmount: number;    // rupees
+  charityAmount: number;   // rupees
+}
+
 export const cashbackRepository = {
   /**
    * INSERT a new cashback_transactions row.
@@ -131,6 +142,114 @@ export const cashbackRepository = {
            converted_at    = NOW()
        WHERE id = $1`,
       [sessionId, cashbackAmount],
+    );
+  },
+
+  /**
+   * Lock a cashback_transactions row for a fraud-review resolution (SELECT FOR UPDATE),
+   * joined through attribution_sessions to get the campaign_id.
+   * Must be called inside an open transaction via the provided PoolClient.
+   */
+  async lockTransactionForResolution(
+    client: PoolClient,
+    txId: string,
+  ): Promise<CashbackTransactionForReversal | null> {
+    const res = await client.query<{
+      user_id: string;
+      campaign_id: string;
+      status: string;
+      cashback_amount: string;
+      liquid_amount: string;
+      savings_amount: string;
+      parent_amount: string;
+      charity_amount: string;
+    }>(
+      `SELECT ct.user_id, s.campaign_id, ct.status, ct.cashback_amount,
+              ct.liquid_amount, ct.savings_amount, ct.parent_amount, ct.charity_amount
+       FROM cashback_transactions ct
+       JOIN attribution_sessions s ON s.id = ct.attribution_id
+       WHERE ct.id = $1
+       FOR UPDATE OF ct`,
+      [txId],
+    );
+    const row = res.rows[0];
+    if (!row) return null;
+    return {
+      userId: row.user_id,
+      campaignId: row.campaign_id,
+      status: row.status,
+      cashbackAmount: Number(row.cashback_amount),
+      liquidAmount: Number(row.liquid_amount),
+      savingsAmount: Number(row.savings_amount),
+      parentAmount: Number(row.parent_amount),
+      charityAmount: Number(row.charity_amount),
+    };
+  },
+
+  /**
+   * Reverse a previously-credited cashback: decrement pool_balances by the exact
+   * rupee amounts originally credited (not paise — cashback_transactions already
+   * stores rupees). Must be called inside an open transaction via the provided PoolClient.
+   */
+  async decrementPoolBalances(
+    client: PoolClient,
+    data: Omit<CashbackTransactionForReversal, 'campaignId' | 'status'>,
+  ): Promise<void> {
+    await client.query(
+      `UPDATE pool_balances
+       SET liquid_balance  = liquid_balance  - $2,
+           savings_balance = savings_balance - $3,
+           parent_pending  = parent_pending  - $4,
+           charity_pending = charity_pending - $5,
+           total_earned    = total_earned    - $6,
+           updated_at      = NOW()
+       WHERE user_id = $1`,
+      [
+        data.userId,
+        data.liquidAmount,
+        data.savingsAmount,
+        data.parentAmount,
+        data.charityAmount,
+        data.cashbackAmount,
+      ],
+    );
+  },
+
+  /**
+   * Decrement campaigns.spent_to_date by cashbackAmount (rupees) — the inverse of
+   * incrementCampaignSpend, used when reversing a rejected fraud case.
+   * Must be called inside an open transaction via the provided PoolClient.
+   */
+  async decrementCampaignSpend(
+    client: PoolClient,
+    campaignId: string,
+    cashbackAmount: number,
+  ): Promise<void> {
+    await client.query(
+      `UPDATE campaigns
+       SET spent_to_date = spent_to_date - $2,
+           updated_at    = NOW()
+       WHERE id = $1`,
+      [campaignId, cashbackAmount],
+    );
+  },
+
+  /**
+   * Set a cashback_transactions row's status directly (used for both the simple
+   * approve path and after a reject's compensating writes have been applied).
+   * Must be called inside an open transaction via the provided PoolClient.
+   */
+  async setTransactionStatus(
+    client: PoolClient,
+    txId: string,
+    status: 'completed' | 'rejected',
+  ): Promise<void> {
+    await client.query(
+      `UPDATE cashback_transactions
+       SET status       = $2::text,
+           completed_at = CASE WHEN $2::text = 'completed' THEN NOW() ELSE completed_at END
+       WHERE id = $1`,
+      [txId, status],
     );
   },
 
