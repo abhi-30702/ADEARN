@@ -23,6 +23,14 @@ const createCampaignSchema = z.object({
 
 type CreateCampaignInput = z.infer<typeof createCampaignSchema>;
 
+function extractErrorMessage(err: unknown): string {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const response = (err as { response?: { data?: { error?: { message?: string } } } }).response;
+    if (response?.data?.error?.message) return response.data.error.message;
+  }
+  return 'Failed to create campaign. Please try again.';
+}
+
 export function CampaignCreatePage() {
   const navigate = useNavigate();
 
@@ -42,21 +50,25 @@ export function CampaignCreatePage() {
   const watchedBudget = useWatch({ control: form.control, name: 'total_budget' });
 
   async function onSubmit(data: CreateCampaignInput) {
-    await api.post('/advertiser/campaigns', {
-      name: data.name,
-      creative_url: data.creative_url,
-      creative_type: data.creative_type,
-      target_profile: {
-        categories: data.target_categories.split(',').map((s) => s.trim()).filter(Boolean),
-        brands: data.target_brands.split(',').map((s) => s.trim()).filter(Boolean),
-      },
-      cashback_rate: data.cashback_rate,
-      daily_cap: data.daily_cap,
-      total_budget: data.total_budget,
-      starts_at: data.starts_at || undefined,
-      ends_at: data.ends_at || undefined,
-    });
-    void navigate({ to: '/advertiser' });
+    try {
+      await api.post('/advertiser/campaigns', {
+        name: data.name,
+        creative_url: data.creative_url,
+        creative_type: data.creative_type,
+        target_profile: {
+          categories: data.target_categories.split(',').map((s) => s.trim()).filter(Boolean),
+          brands: data.target_brands.split(',').map((s) => s.trim()).filter(Boolean),
+        },
+        cashback_rate: data.cashback_rate,
+        daily_cap: data.daily_cap,
+        total_budget: data.total_budget,
+        starts_at: data.starts_at ? new Date(data.starts_at).toISOString() : undefined,
+        ends_at: data.ends_at ? new Date(data.ends_at).toISOString() : undefined,
+      });
+      void navigate({ to: '/advertiser' });
+    } catch (err) {
+      form.setError('root', { message: extractErrorMessage(err) });
+    }
   }
 
   const errors = form.formState.errors;
