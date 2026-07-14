@@ -25,6 +25,7 @@ export function AdvertiserDashboardPage() {
       const res = await api.get('/advertiser/campaigns');
       return (res.data.data ?? []) as Campaign[];
     },
+    refetchInterval: 10_000,
   });
 
   const activeCampaigns = campaigns.filter(c => c.status === 'active').length;

@@ -56,9 +56,22 @@ export const campaignRepository = {
     return res.rows[0];
   },
 
-  async findByAdvertiserId(advertiserId: string): Promise<Campaign[]> {
-    const res = await db.query<Campaign>(
-      `SELECT * FROM campaigns WHERE advertiser_id = $1 ORDER BY created_at DESC`,
+  async findByAdvertiserId(
+    advertiserId: string,
+  ): Promise<(Campaign & { conversion_count: number })[]> {
+    const res = await db.query<Campaign & { conversion_count: number }>(
+      `
+      SELECT c.*,
+        (SELECT COUNT(t.id)::int
+         FROM attribution_sessions s
+         JOIN cashback_transactions t
+           ON t.attribution_id = s.id
+          AND t.status = 'completed'
+         WHERE s.campaign_id = c.id) AS conversion_count
+      FROM campaigns c
+      WHERE c.advertiser_id = $1
+      ORDER BY c.created_at DESC
+      `,
       [advertiserId],
     );
     return res.rows;

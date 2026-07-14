@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { GlassCard, EmptyState, StatusBadge, Button } from '../../components/ui';
+import { CheckoutModal } from '../../components/CheckoutModal';
 import { api } from '../../lib/api';
 import { ShoppingBag } from 'lucide-react';
 
@@ -13,6 +15,8 @@ interface AdCard {
 }
 
 export function FeedPage() {
+  const [checkoutAd, setCheckoutAd] = useState<AdCard | null>(null);
+
   const { data: ads = [], isLoading } = useQuery<AdCard[]>({
     queryKey: ['feed'],
     queryFn: async () => {
@@ -60,12 +64,12 @@ export function FeedPage() {
                 style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
               >
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-teal-300/10 border border-teal-300/20 text-teal-300 text-xs font-bold">
-                  {ad.cashback_rate}% cashback
+                  {(ad.cashback_rate * 100).toFixed(1)}% cashback
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void api.post(`/feed/${ad.campaign_id}/view`)}
+                  onClick={() => setCheckoutAd(ad)}
                 >
                   Shop Now
                 </Button>
@@ -73,6 +77,10 @@ export function FeedPage() {
             </GlassCard>
           ))}
         </div>
+      )}
+
+      {checkoutAd && (
+        <CheckoutModal ad={checkoutAd} onClose={() => setCheckoutAd(null)} />
       )}
     </AppLayout>
   );

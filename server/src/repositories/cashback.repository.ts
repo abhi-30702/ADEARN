@@ -47,8 +47,8 @@ export const cashbackRepository = {
          (user_id, attribution_id, purchase_amount, cashback_amount,
           liquid_amount, savings_amount, parent_amount, charity_amount,
           status, fraud_score, completed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-               CASE WHEN $9 = 'completed' THEN NOW() ELSE NULL END)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text, $10,
+               CASE WHEN $9::text = 'completed' THEN NOW() ELSE NULL END)
        RETURNING id`,
       [
         data.userId,

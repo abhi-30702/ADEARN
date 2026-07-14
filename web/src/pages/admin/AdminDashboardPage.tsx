@@ -62,7 +62,7 @@ function FinancialsTab() {
   const { data, isLoading, isError } = useQuery<AdminFinancials>({
     queryKey: ['admin-financials'],
     queryFn: getAdminFinancials,
-    staleTime: 60_000,
+    refetchInterval: 10_000,
   });
 
   if (isLoading) {
@@ -125,7 +125,7 @@ function FraudQueueTab() {
   const { data, isLoading, isError } = useQuery<FraudQueueRow[]>({
     queryKey: ['admin-fraud-queue'],
     queryFn: getFraudQueue,
-    staleTime: 30_000,
+    refetchInterval: 10_000,
   });
 
   const mutation = useMutation({
