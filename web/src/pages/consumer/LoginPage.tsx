@@ -21,6 +21,7 @@ const DEMO_ACCOUNTS = [
 export function LoginPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
+
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
@@ -30,8 +31,12 @@ export function LoginPage() {
   const requestOtp = async (phoneNum = phone) => {
     setLoading(true);
     setError('');
+
     try {
-      await api.post('/auth/request-otp', { mobile: phoneNum });
+      await api.post('/auth/request-otp', {
+        mobile: phoneNum,
+      });
+
       setPhone(phoneNum);
       setStep('otp');
     } catch {
@@ -41,23 +46,48 @@ export function LoginPage() {
     }
   };
 
-  const verifyOtp = async () => {
+  const verifyOtp = async (mobile?: string, otpValue?: string) => {
     setLoading(true);
     setError('');
+
+    const actualPhone = mobile ?? phone;
+    const actualOtp = otpValue ?? otp;
+
     try {
-      const res = await api.post('/auth/verify-otp', { mobile: phone, otp });
-      const { user, access_token, refresh_token } = res.data.data as {
-        user: { id: string; name: string; role: 'consumer' | 'advertiser' | 'admin'; kyc_status: string };
+      const res = await api.post('/auth/verify-otp', {
+        mobile: actualPhone,
+        otp: actualOtp,
+      });
+
+      const {
+        user,
+        access_token,
+        refresh_token,
+      } = res.data.data as {
+        user: {
+          id: string;
+          name: string;
+          role: 'consumer' | 'advertiser' | 'admin';
+          kyc_status: string;
+        };
         access_token: string;
         refresh_token: string;
       };
+
       setAuth(user, access_token, refresh_token);
-      navigate({ to: ROLE_HOME[user.role] ?? '/feed' });
+
+      navigate({
+        to: ROLE_HOME[user.role] ?? '/feed',
+      });
     } catch {
       setError('Invalid OTP. Try 123456 for demo accounts.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const verifyOtpHandler = async () => {
+    await verifyOtp();
   };
 
   const quickLogin = async (demoPhone: string) => {
@@ -68,15 +98,16 @@ export function LoginPage() {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
-      style={{ backgroundColor: '#060b14' }}
+      style={{
+        backgroundColor: '#060b14',
+      }}
     >
-      {/* Background glows */}
+      {/* Background */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse 60% 50% at 80% 10%, rgba(94,234,212,0.08) 0%, transparent 70%),' +
-            'radial-gradient(ellipse 50% 40% at 20% 90%, rgba(255,210,194,0.06) 0%, transparent 70%)',
+            'radial-gradient(ellipse 60% 50% at 80% 10%, rgba(94,234,212,0.08) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 20% 90%, rgba(255,210,194,0.06) 0%, transparent 70%)',
         }}
       />
 
@@ -84,13 +115,22 @@ export function LoginPage() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-300 to-teal-600 flex items-center justify-center mb-3 shadow-lg shadow-teal-300/20">
-            <Zap className="w-6 h-6 text-slate-900" strokeWidth={2.5} />
+            <Zap
+              className="w-6 h-6 text-slate-900"
+              strokeWidth={2.5}
+            />
           </div>
-          <h1 className="text-2xl font-bold text-slate-100 tracking-tight">AdEarn</h1>
-          <p className="text-sm text-slate-400 mt-1">Get paid for every purchase</p>
+
+          <h1 className="text-2xl font-bold text-slate-100 tracking-tight">
+            AdEarn
+          </h1>
+
+          <p className="text-sm text-slate-400 mt-1">
+            Get paid for every purchase
+          </p>
         </div>
 
-        {/* Glass card */}
+        {/* Login Card */}
         <div
           className="p-6 rounded-[14px]"
           style={{
@@ -102,17 +142,34 @@ export function LoginPage() {
         >
           {step === 'phone' ? (
             <>
-              <h2 className="text-base font-semibold text-slate-100 mb-4">Sign in</h2>
+              <h2 className="text-base font-semibold text-slate-100 mb-4">
+                Sign in
+              </h2>
+
               <div className="flex flex-col gap-4">
                 <Input
                   label="Mobile Number"
                   type="tel"
                   placeholder="Enter 10-digit mobile"
                   value={phone}
-                  onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  onKeyDown={e => e.key === 'Enter' && phone.length === 10 && requestOtp()}
+                  onChange={(e) =>
+                    setPhone(
+                      e.target.value.replace(/\D/g, '').slice(0, 10)
+                    )
+                  }
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' &&
+                    phone.length === 10 &&
+                    requestOtp()
+                  }
                 />
-                {error && <p className="text-xs text-red-400">{error}</p>}
+
+                {error && (
+                  <p className="text-xs text-red-400">
+                    {error}
+                  </p>
+                )}
+
                 <Button
                   onClick={() => requestOtp()}
                   loading={loading}
@@ -132,7 +189,7 @@ export function LoginPage() {
                   Demo Accounts
                 </p>
                 <div className="flex gap-2">
-                  {DEMO_ACCOUNTS.map(acc => (
+                  {DEMO_ACCOUNTS.map((acc) => (
                     <button
                       key={acc.label}
                       onClick={() => quickLogin(acc.phone)}
@@ -148,13 +205,24 @@ export function LoginPage() {
           ) : (
             <>
               <button
-                onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+                onClick={() => {
+                  setStep('phone');
+                  setOtp('');
+                  setError('');
+                }}
                 className="text-xs text-slate-400 hover:text-slate-200 transition-colors mb-4 flex items-center gap-1"
               >
                 ← Back
               </button>
-              <h2 className="text-base font-semibold text-slate-100 mb-1">Enter OTP</h2>
-              <p className="text-xs text-slate-400 mb-4">Sent to +91 {phone}</p>
+
+              <h2 className="text-base font-semibold text-slate-100 mb-1">
+                Enter OTP
+              </h2>
+
+              <p className="text-xs text-slate-400 mb-4">
+                Sent to +91 {phone}
+              </p>
+
               <div className="flex flex-col gap-4">
                 <Input
                   label="OTP"
@@ -162,12 +230,26 @@ export function LoginPage() {
                   inputMode="numeric"
                   placeholder="6-digit code"
                   value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  onKeyDown={e => e.key === 'Enter' && otp.length === 6 && verifyOtp()}
+                  onChange={(e) =>
+                    setOtp(
+                      e.target.value.replace(/\D/g, '').slice(0, 6)
+                    )
+                  }
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' &&
+                    otp.length === 6 &&
+                    verifyOtpHandler()
+                  }
                 />
-                {error && <p className="text-xs text-red-400">{error}</p>}
+
+                {error && (
+                  <p className="text-xs text-red-400">
+                    {error}
+                  </p>
+                )}
+
                 <Button
-                  onClick={verifyOtp}
+                  onClick={verifyOtpHandler}
                   loading={loading}
                   disabled={otp.length !== 6}
                   className="w-full"

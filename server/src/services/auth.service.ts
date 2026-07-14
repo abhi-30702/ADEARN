@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
 import { redis } from '../config/redis';
@@ -8,6 +9,17 @@ import { logger } from '../config/logger';
 import type { JwtPayload, User } from '@adearn/shared';
 
 const REFRESH_TOKEN_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
+
+// Parse PEM strings into KeyObjects once at module load, rather than on every sign/verify call.
+const PRIVATE_KEY = crypto.createPrivateKey({
+  key: env.JWT_PRIVATE_KEY,
+  format: 'pem',
+});
+
+const PUBLIC_KEY = crypto.createPublicKey({
+  key: env.JWT_PUBLIC_KEY,
+  format: 'pem',
+});
 
 function generateTokens(user: User): { accessToken: string; refreshToken: string } {
   const payload: Omit<JwtPayload, 'iat' | 'exp'> = {
@@ -20,9 +32,9 @@ function generateTokens(user: User): { accessToken: string; refreshToken: string
     expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
   };
 
-  const accessToken = jwt.sign(payload, env.JWT_PRIVATE_KEY, accessTokenOptions);
+  const accessToken = jwt.sign(payload, PRIVATE_KEY, accessTokenOptions);
 
-  const refreshToken = jwt.sign({ sub: user.id }, env.JWT_PRIVATE_KEY, {
+  const refreshToken = jwt.sign({ sub: user.id }, PRIVATE_KEY, {
     algorithm: 'RS256',
     expiresIn: '30d',
   });
@@ -94,7 +106,7 @@ export const authService = {
   async refreshToken(refreshToken: string): Promise<{ access_token: string }> {
     let payload: { sub: string };
     try {
-      payload = jwt.verify(refreshToken, env.JWT_PUBLIC_KEY, {
+      payload = jwt.verify(refreshToken, PUBLIC_KEY, {
         algorithms: ['RS256'],
       }) as { sub: string };
     } catch {

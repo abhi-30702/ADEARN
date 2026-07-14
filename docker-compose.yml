@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
@@ -7,26 +6,55 @@ services:
       POSTGRES_PASSWORD: adearn
       POSTGRES_DB: adearn_dev
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U adearn"]
+      test: ["CMD-SHELL", "pg_isready -U adearn -d adearn_dev"]
       interval: 10s
       retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     command: redis-server --appendonly yes
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file:
+      - server/.env
+    environment:
+      # Override host-oriented values from server/.env with in-network
+      # service DNS names — the container talks to postgres/redis over the
+      # compose network, never through the host-mapped ports above.
+      DATABASE_URL: postgresql://adearn:adearn@postgres:5432/adearn_dev
+      REDIS_URL: redis://redis:6379
+      # This image is built by the Dockerfile's production stage (devDeps,
+      # incl. pino-pretty, are omitted) — it must run as NODE_ENV=production
+      # regardless of what server/.env has for host-based `npm run dev`,
+      # otherwise pino tries to load the pino-pretty transport and crashes.
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   pgadmin:
     image: dpage/pgadmin4
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@adearn.local
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "5050:80"

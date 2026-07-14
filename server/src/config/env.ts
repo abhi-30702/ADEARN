@@ -7,8 +7,14 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
   REDIS_PREFIX: z.string().default('adearn:'),
-  JWT_PRIVATE_KEY: z.string().min(1),
-  JWT_PUBLIC_KEY: z.string().min(1),
+  JWT_PRIVATE_KEY: z
+    .string()
+    .min(1)
+    .transform((value) => value.replace(/\\n/g, '\n')),
+  JWT_PUBLIC_KEY: z
+    .string()
+    .min(1)
+    .transform((value) => value.replace(/\\n/g, '\n')),
   JWT_EXPIRES_IN: z.string().default('24h'),
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_PUBLISHABLE_KEY: z.string().min(1),
