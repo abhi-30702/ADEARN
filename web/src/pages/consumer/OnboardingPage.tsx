@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { clsx } from 'clsx';
+import { AxiosError } from 'axios';
 import { api } from '../../lib/api';
+
+function getApiError(err: unknown, fallback: string): string {
+  if (err instanceof AxiosError) {
+    return (err.response?.data as { error?: { message?: string } })?.error?.message ?? fallback;
+  }
+  return fallback;
+}
 import { Button } from '../../components/ui/Button';
 import { CheckCircle2, Zap } from 'lucide-react';
 
@@ -58,13 +66,16 @@ export function OnboardingPage() {
     setError('');
     try {
       await api.put('/profile', {
-        categories: selectedCats,
-        brand_affinity: [],
-        price_range: 'mid',
+        categories: selectedCats.map((category) => ({
+          category,
+          brands: [],
+          spend_range: 'mid',
+          frequency: 'Monthly' as const,
+        })),
       });
       setStep(2);
-    } catch {
-      setError('Failed to save profile. Please try again.');
+    } catch (err) {
+      setError(getApiError(err, 'Failed to save profile. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -81,8 +92,8 @@ export function OnboardingPage() {
         charity_pct: pools.charity,
       });
       setStep(3);
-    } catch {
-      setError('Failed to save pool configuration.');
+    } catch (err) {
+      setError(getApiError(err, 'Failed to save pool configuration.'));
     } finally {
       setLoading(false);
     }

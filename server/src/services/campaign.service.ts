@@ -38,34 +38,35 @@ export const campaignService = {
     if (!campaign) throw AppError.notFound('Campaign not found');
     if (campaign.advertiser_id !== advertiser.id) throw AppError.forbidden('Not your campaign');
 
-    const stats = await campaignRepository.getStats(campaignId);
+    const [stats, recentConversions] = await Promise.all([
+      campaignRepository.getStats(campaignId),
+      campaignRepository.getRecentConversions(campaignId),
+    ]);
 
-    const impressions = Number(stats.impressions);
     const conversions = Number(stats.conversions);
     const totalSpend = Number(stats.total_spend);
     const avgCashback = Number(stats.avg_cashback_paid);
 
-    const starts = campaign.starts_at
-      ? new Date(campaign.starts_at).toISOString().split('T')[0]
-      : 'N/A';
-    const ends = campaign.ends_at
-      ? new Date(campaign.ends_at).toISOString().split('T')[0]
-      : 'ongoing';
-
     return {
-      campaign_id: campaignId,
-      period: `${starts} to ${ends}`,
-      impressions,
-      conversions,
-      conversion_rate:
-        impressions > 0 ? Math.round((conversions / impressions) * 1000) / 1000 : 0,
-      total_spend: totalSpend,
-      avg_cashback_paid: Math.round(avgCashback * 100) / 100,
-      quality_score: Number(campaign.cashback_rate),
-      audience_quality_pct:
-        conversions > 0 && impressions > 0
-          ? Math.round((conversions / impressions) * 1000) / 1000
-          : 0,
+      campaign: {
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        cashback_rate: String(campaign.cashback_rate),
+        total_budget: String(campaign.total_budget),
+        spent_to_date: String(campaign.spent_to_date),
+        ends_at: campaign.ends_at ? new Date(campaign.ends_at).toISOString() : null,
+      },
+      conversions_count: conversions,
+      total_spent: totalSpend,
+      avg_cashback: Math.round(avgCashback * 100) / 100,
+      recent_conversions: recentConversions.map((c) => ({
+        id: c.id,
+        created_at: c.created_at,
+        cashback_amount: Number(c.cashback_amount),
+        purchase_amount: Number(c.purchase_amount),
+        status: c.status,
+      })),
     };
   },
 };

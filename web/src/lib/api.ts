@@ -57,6 +57,43 @@ export const getWallet = (): Promise<WalletData> =>
 export const getTransactions = (): Promise<CashbackTransaction[]> =>
   api.get('/wallet/transactions').then((r) => r.data.data);
 
+// Ad reviews
+
+export interface AdReviewInput {
+  campaign_id: string;
+  transaction_id: string;
+  relevance_score: number;
+  honesty_score: number;
+  value_score: number;
+  flag_reason?: 'misleading_claim' | 'price_surge' | 'irrelevant' | 'spam';
+}
+
+export const submitAdReview = (
+  input: AdReviewInput,
+): Promise<{ composite_score: number; created: boolean }> =>
+  api.post('/reviews', input).then((r) => r.data.data);
+
+// Charity impact (public — no auth)
+
+export interface CharityImpact {
+  total_raised: number;
+  total_pending: number;
+  total_disbursed: number;
+  contributors: number;
+  ngos: { id: string; name: string; cause: string; accumulated_balance: number }[];
+  disbursements: {
+    id: string;
+    ngo_name: string | null;
+    total_amount: number;
+    user_count: number;
+    disbursed_at: string;
+    notes: string | null;
+  }[];
+}
+
+export const getCharityImpact = (): Promise<CharityImpact> =>
+  api.get('/charity/impact').then((r) => r.data.data);
+
 // Advertiser API
 
 export interface RecentConversion {

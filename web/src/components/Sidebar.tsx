@@ -5,16 +5,23 @@ import { useAuthStore } from '../store/authStore';
 import {
   LayoutDashboard, Wallet, ArrowLeftRight, Settings,
   PlusCircle, BarChart2, Shield, Users, Megaphone,
-  FileText, DollarSign, ChevronLeft, ChevronRight, Zap,
+  FileText, Heart, ChevronLeft, ChevronRight, Zap,
 } from 'lucide-react';
 
-type NavItem = { label: string; icon: React.ElementType; to: string };
+type NavItem = {
+  label: string;
+  icon: React.ElementType;
+  to: string;
+  search?: Record<string, string>;
+};
 
 const NAV: Record<string, NavItem[]> = {
   consumer: [
     { label: 'Dashboard',    icon: LayoutDashboard, to: '/feed' },
     { label: 'Wallet',       icon: Wallet,          to: '/wallet' },
-    { label: 'Transactions', icon: ArrowLeftRight,  to: '/wallet' },
+    { label: 'Insights',     icon: BarChart2,       to: '/insights' },
+    { label: 'Transactions', icon: ArrowLeftRight,  to: '/transactions' },
+    { label: 'Charity Impact', icon: Heart,         to: '/impact' },
     { label: 'Settings',     icon: Settings,        to: '/onboarding' },
   ],
   advertiser: [
@@ -23,12 +30,11 @@ const NAV: Record<string, NavItem[]> = {
     { label: 'Analytics',    icon: BarChart2,       to: '/advertiser/analytics' },
   ],
   admin: [
-    { label: 'Overview',     icon: LayoutDashboard, to: '/admin' },
-    { label: 'Fraud Queue',  icon: Shield,          to: '/admin' },
-    { label: 'Users',        icon: Users,           to: '/admin' },
-    { label: 'Advertisers',  icon: Megaphone,       to: '/admin' },
+    { label: 'Overview',     icon: LayoutDashboard, to: '/admin', search: { tab: 'financials' } },
+    { label: 'Fraud Queue',  icon: Shield,          to: '/admin', search: { tab: 'fraud' } },
+    { label: 'Users',        icon: Users,           to: '/admin', search: { tab: 'users' } },
+    { label: 'Advertisers',  icon: Megaphone,       to: '/admin', search: { tab: 'advertisers' } },
     { label: 'Audit Log',    icon: FileText,        to: '/admin/audit-log' },
-    { label: 'Financials',   icon: DollarSign,      to: '/admin' },
   ],
 };
 
@@ -92,12 +98,16 @@ export function Sidebar() {
       {/* Nav items */}
       <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
         {items.map(item => {
-          const isActive = location.pathname === item.to;
+          const currentTab = (location.search as { tab?: string }).tab ?? 'financials';
+          const isActive = item.search?.tab
+            ? location.pathname === item.to && currentTab === item.search.tab
+            : location.pathname === item.to && !item.to.includes('?');
           const Icon = item.icon;
           return (
             <Link
               key={item.label}
               to={item.to}
+              search={item.search}
               title={collapsed ? item.label : undefined}
               className={clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 whitespace-nowrap',

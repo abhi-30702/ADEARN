@@ -169,9 +169,15 @@ describe('GET /api/v1/feed', () => {
         `INSERT INTO advertisers
            (user_id, company_name, gst_number, contact_email, contact_mobile,
             quality_score, status, pledge_signed, pledge_signed_at, pledge_ip)
-         VALUES ($1, $2, '27TESTFD99F1ZP', $3, $4, 4.00, 'active', true, NOW(), '127.0.0.1')
+         VALUES ($1, $2, $5, $3, $4, 4.00, 'active', true, NOW(), '127.0.0.1')
          RETURNING id`,
-        [advertiserUserId, `Feed Brand ${suffix}`, `feed${suffix}@test.in`, advMobile],
+        [
+          advertiserUserId,
+          `Feed Brand ${suffix}`,
+          `feed${suffix}@test.in`,
+          advMobile,
+          `27FD${suffix}F1ZP`,
+        ],
       );
       advertiserId = advRes.rows[0]!.id;
 
@@ -216,7 +222,15 @@ describe('GET /api/v1/feed', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ success: true });
-      expect(Array.isArray(res.body.data)).toBe(true);
+      // GET /feed returns { ads: [...], next_refresh_at } — not a bare array.
+      expect(Array.isArray(res.body.data.ads)).toBe(true);
+
+      // The seeded campaign targets Electronics, matching this consumer's profile,
+      // so it must actually be matched — not merely an empty array.
+      const seededAd = res.body.data.ads.find(
+        (ad: { campaign_id: string }) => ad.campaign_id === campaignId,
+      );
+      expect(seededAd).toBeDefined();
     });
   });
 });

@@ -21,6 +21,13 @@ export interface CharityLedgerRow {
   notes: string | null;
 }
 
+export interface NgoRow {
+  id: string;
+  name: string;
+  cause: string;
+  accumulated_balance: string;
+}
+
 export const disbursementRepository = {
   /**
    * Returns all users with parent_pending > 0, along with their parent bank
@@ -140,5 +147,24 @@ export const disbursementRepository = {
        LIMIT 100`,
     );
     return res.rows;
+  },
+
+  /** Active NGOs partnered with the platform, for the public impact page. */
+  async getNgos(): Promise<NgoRow[]> {
+    const res = await db.query<NgoRow>(
+      `SELECT id, name, cause, accumulated_balance
+       FROM ngos
+       WHERE is_active = true
+       ORDER BY name`,
+    );
+    return res.rows;
+  },
+
+  /** Total amount ever disbursed to charity across all disbursements. */
+  async getTotalDisbursed(): Promise<string> {
+    const res = await db.query<{ total: string }>(
+      `SELECT COALESCE(SUM(total_amount), 0)::TEXT AS total FROM charity_disbursements`,
+    );
+    return res.rows[0]?.total ?? '0';
   },
 };

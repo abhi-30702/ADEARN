@@ -65,7 +65,7 @@ export function AuditLogPage() {
   });
 
   const backButton = (
-    <Link to="/admin">
+    <Link to="/admin" search={{ tab: 'financials' }}>
       <Button variant="ghost" size="sm" icon={<ChevronLeft className="w-4 h-4" />}>
         Back
       </Button>

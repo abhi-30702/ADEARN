@@ -30,6 +30,14 @@ const envSchema = z.object({
   CASHBACK_MIN_PER_TRANSACTION: z.coerce.number().default(1),
   FRAUD_SCORE_THRESHOLD: z.coerce.number().default(0.8),
   ATTRIBUTION_WINDOW_HOURS: z.coerce.number().default(24),
+  // How long a consumer must wait between purchase-profile updates.
+  // Defaults to 30 days (the product rule); set to 0 to disable the cooldown
+  // (useful for demos/testing so the onboarding flow can be re-run freely).
+  PROFILE_UPDATE_COOLDOWN_DAYS: z.coerce.number().default(30),
+  // How long an ad is suppressed from a user's feed after they view it, to
+  // prevent ad fatigue. Defaults to 48 hours; set to 0 to always re-show
+  // (useful for demos/testing where only one matching campaign exists).
+  AD_RESHOW_WINDOW_HOURS: z.coerce.number().default(48),
   SENTRY_DSN: z.string().optional(),
 });
 

@@ -1,4 +1,5 @@
 import { db } from '../config/db';
+import { env } from '../config/env';
 
 interface PurchaseProfile {
   id: string;
@@ -20,31 +21,50 @@ export const profileRepository = {
   },
 
   async upsert(userId: string, categories: unknown[]): Promise<PurchaseProfile> {
-    const nextUpdateAt = new Date();
-    nextUpdateAt.setDate(nextUpdateAt.getDate() + 30);
+    // next_update_at gates the next allowed update. When the cooldown is
+    // disabled (0 days), leave it null so updates are always permitted.
+    let nextUpdateAt: string | null = null;
+    if (env.PROFILE_UPDATE_COOLDOWN_DAYS > 0) {
+      const d = new Date();
+      d.setDate(d.getDate() + env.PROFILE_UPDATE_COOLDOWN_DAYS);
+      nextUpdateAt = d.toISOString();
+    }
 
-    // Attempt insert for first-time profile creation
-    const insertRes = await db.query<PurchaseProfile>(
-      `INSERT INTO purchase_profiles (user_id, categories, next_update_at)
-       VALUES ($1, $2::jsonb, $3)
-       ON CONFLICT DO NOTHING
-       RETURNING *`,
-      [userId, JSON.stringify(categories), nextUpdateAt.toISOString()],
-    );
+    // There is no unique constraint on purchase_profiles, so we cannot rely on
+    // ON CONFLICT. Do it explicitly and atomically: retire every existing active
+    // profile for this user (keeps history rows for auditing) and insert a fresh
+    // active one. This guarantees exactly one active profile per user and
+    // self-heals any duplicate active rows created by earlier code.
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
 
-    if (insertRes.rows[0]) return insertRes.rows[0];
+      const previous = await client.query<{ version: number }>(
+        `UPDATE purchase_profiles
+         SET is_active = false
+         WHERE user_id = $1 AND is_active = true
+         RETURNING version`,
+        [userId],
+      );
 
-    // Profile already exists — update it
-    const updateRes = await db.query<PurchaseProfile>(
-      `UPDATE purchase_profiles
-       SET categories    = $2::jsonb,
-           version       = version + 1,
-           last_updated  = NOW(),
-           next_update_at = $3
-       WHERE user_id = $1 AND is_active = true
-       RETURNING *`,
-      [userId, JSON.stringify(categories), nextUpdateAt.toISOString()],
-    );
-    return updateRes.rows[0];
+      // Carry the version forward so it keeps incrementing across updates.
+      const nextVersion =
+        previous.rows.reduce((max, r) => Math.max(max, r.version), 0) + 1;
+
+      const inserted = await client.query<PurchaseProfile>(
+        `INSERT INTO purchase_profiles (user_id, categories, version, next_update_at)
+         VALUES ($1, $2::jsonb, $3, $4)
+         RETURNING *`,
+        [userId, JSON.stringify(categories), nextVersion, nextUpdateAt],
+      );
+
+      await client.query('COMMIT');
+      return inserted.rows[0];
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   },
 };

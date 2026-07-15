@@ -8,6 +8,14 @@ interface CampaignStats {
   avg_cashback_paid: string;
 }
 
+export interface RecentConversionRow {
+  id: string;
+  created_at: string;
+  cashback_amount: string;
+  purchase_amount: string;
+  status: string;
+}
+
 export const campaignRepository = {
   async findAdvertiserByUserId(userId: string): Promise<{ id: string; status: string } | null> {
     const res = await db.query<{ id: string; status: string }>(
@@ -83,6 +91,29 @@ export const campaignRepository = {
       [campaignId],
     );
     return res.rows[0] ?? null;
+  },
+
+  async getRecentConversions(
+    campaignId: string,
+    limit = 10,
+  ): Promise<RecentConversionRow[]> {
+    const res = await db.query<RecentConversionRow>(
+      `
+      SELECT
+        t.id,
+        t.created_at,
+        t.cashback_amount::text  AS cashback_amount,
+        t.purchase_amount::text  AS purchase_amount,
+        t.status
+      FROM attribution_sessions s
+      JOIN cashback_transactions t ON t.attribution_id = s.id
+      WHERE s.campaign_id = $1
+      ORDER BY t.created_at DESC
+      LIMIT $2
+      `,
+      [campaignId, limit],
+    );
+    return res.rows;
   },
 
   async getStats(campaignId: string): Promise<CampaignStats> {

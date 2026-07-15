@@ -3,9 +3,9 @@ import { db } from '../config/db';
 export interface AdvertiserStats {
   total_campaigns: number;
   active_campaigns: number;
-  total_spent: string;
+  total_spent: number;
   total_conversions: number;
-  avg_quality_score: string | null;
+  avg_conversion_rate: number;
 }
 
 export interface FinancialSummary {
@@ -68,24 +68,26 @@ export const analyticsRepository = {
    * Joins cashback_transactions via attribution_sessions (no direct campaign_id FK).
    */
   async getAdvertiserStats(advertiserId: string): Promise<AdvertiserStats> {
+    // Impressions = attribution sessions (ad views); conversions = completed
+    // cashback transactions. The ad_reviews table is intentionally NOT joined
+    // here: it would fan out rows and inflate SUM(spend)/COUNT(conversions).
     const res = await db.query<{
       total_campaigns: string;
       active_campaigns: string;
       total_spent: string;
       total_conversions: string;
-      avg_quality_score: string | null;
+      total_impressions: string;
     }>(
       `SELECT
          COUNT(DISTINCT c.id)                                                  AS total_campaigns,
          COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'active')              AS active_campaigns,
          COALESCE(SUM(ct.cashback_amount), 0)::TEXT                           AS total_spent,
          COUNT(ct.id)::TEXT                                                    AS total_conversions,
-         AVG(ar.composite_score)::DECIMAL(3,2)::TEXT                          AS avg_quality_score
+         COUNT(DISTINCT s.id)::TEXT                                            AS total_impressions
        FROM campaigns c
        LEFT JOIN attribution_sessions s  ON s.campaign_id = c.id
        LEFT JOIN cashback_transactions ct
               ON ct.attribution_id = s.id AND ct.status = 'completed'
-       LEFT JOIN ad_reviews ar           ON ar.campaign_id = c.id
        WHERE c.advertiser_id = $1`,
       [advertiserId],
     );
@@ -95,18 +97,25 @@ export const analyticsRepository = {
       return {
         total_campaigns: 0,
         active_campaigns: 0,
-        total_spent: '0',
+        total_spent: 0,
         total_conversions: 0,
-        avg_quality_score: null,
+        avg_conversion_rate: 0,
       };
     }
+
+    const totalConversions = parseInt(row.total_conversions ?? '0', 10);
+    const totalImpressions = parseInt(row.total_impressions ?? '0', 10);
+    const avgConversionRate =
+      totalImpressions > 0
+        ? Math.round((totalConversions / totalImpressions) * 1000) / 10
+        : 0;
 
     return {
       total_campaigns: parseInt(row.total_campaigns ?? '0', 10),
       active_campaigns: parseInt(row.active_campaigns ?? '0', 10),
-      total_spent: row.total_spent ?? '0',
-      total_conversions: parseInt(row.total_conversions ?? '0', 10),
-      avg_quality_score: row.avg_quality_score ?? null,
+      total_spent: Number(row.total_spent ?? '0'),
+      total_conversions: totalConversions,
+      avg_conversion_rate: avgConversionRate,
     };
   },
 

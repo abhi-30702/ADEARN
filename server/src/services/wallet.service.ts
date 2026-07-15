@@ -19,10 +19,12 @@ export const walletService = {
     const rows = await walletRepository.getTransactions(userId);
     return rows.map(r => ({
       id:              r.id,
+      campaign_id:     r.campaign_id,
       campaign_name:   r.campaign_name,
       cashback_amount: Number(r.cashback_amount),
       created_at:      r.created_at,
       status:          r.status,
+      reviewed:        r.reviewed,
     }));
   },
 };

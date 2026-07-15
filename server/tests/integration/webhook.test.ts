@@ -18,6 +18,19 @@
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RSA key pair generated synchronously BEFORE jest.mock() runs.
+// auth.service parses these into crypto KeyObjects at module load, so they must
+// be real PEMs — placeholder strings throw DECODER routines::unsupported on import.
+// ─────────────────────────────────────────────────────────────────────────────
+import { generateKeyPairSync } from 'node:crypto';
+
+const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Module mocks — jest.mock() calls are hoisted before any import
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -38,8 +51,8 @@ jest.mock('../../src/config/env', () => ({
       'postgresql://adearn:adearn@localhost:5432/adearn_dev',
     REDIS_URL: process.env['REDIS_URL'] ?? 'redis://localhost:6379',
     REDIS_PREFIX: 'adearn_test:',
-    JWT_PRIVATE_KEY: 'test-private-key',
-    JWT_PUBLIC_KEY: 'test-public-key',
+    JWT_PRIVATE_KEY: privateKey,
+    JWT_PUBLIC_KEY: publicKey,
     JWT_EXPIRES_IN: '24h',
     STRIPE_SECRET_KEY: 'sk_test_dummy',
     STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy',
@@ -190,9 +203,21 @@ interface BaseIds {
   ngoId: string;
 }
 
+/**
+ * 7-digit suffix, unique per call. seedBaseData runs once per describe block, so
+ * a bare Date.now() slice can repeat within the same millisecond and collide on
+ * the UNIQUE mobile/gst columns — the counter guarantees distinctness per run.
+ */
+let seedCounter = 0;
+function nextSuffix(): string {
+  const base = Date.now().toString().slice(-5);
+  const counter = (seedCounter++ % 100).toString().padStart(2, '0');
+  return `${base}${counter}`;
+}
+
 /** Insert an advertiser, campaign, and NGO; returns their IDs */
 async function seedBaseData(): Promise<BaseIds> {
-  const suffix = Date.now().toString().slice(-7);
+  const suffix = nextSuffix();
 
   const advUserRes = await testPool.query<{ id: string }>(
     `INSERT INTO users (mobile, name, role, kyc_status, is_active)
@@ -215,9 +240,15 @@ async function seedBaseData(): Promise<BaseIds> {
     `INSERT INTO advertisers
        (user_id, company_name, gst_number, contact_email, contact_mobile,
         quality_score, status, pledge_signed, pledge_signed_at, pledge_ip)
-     VALUES ($1, $2, '27TESTWH99F1ZP', $3, $4, 4.00, 'active', true, NOW(), '127.0.0.1')
+     VALUES ($1, $2, $5, $3, $4, 4.00, 'active', true, NOW(), '127.0.0.1')
      RETURNING id`,
-    [advertiserUserId, `WH Brand ${suffix}`, `wh${suffix}@test.in`, `80${suffix}2`],
+    [
+      advertiserUserId,
+      `WH Brand ${suffix}`,
+      `wh${suffix}@test.in`,
+      `80${suffix}2`,
+      `27WH${suffix}F1ZP`,
+    ],
   );
   const advertiserId = advRes.rows[0]!.id;
 
@@ -320,15 +351,33 @@ async function seedSession(
   return res.rows[0]!.id;
 }
 
-/** Teardown all rows for a consumer (FK-safe order) */
+/**
+ * Teardown all rows for a consumer (FK-safe order).
+ *
+ * audit_log is append-only by design — the no_delete_audit_log / no_update_audit_log
+ * rules make DELETE and UPDATE against it silent no-ops, and audit_log.actor_id
+ * REFERENCES users(id) with the default RESTRICT. So once a consumer has been
+ * through cashback processing (which writes an audit row), that user can never be
+ * hard-deleted: the financial audit trail is meant to outlive the account.
+ *
+ * Delete everything else, and only drop the user when it left no audit trail.
+ * Consumers are seeded with a run-unique mobile, so a retained row cannot collide
+ * with a later run.
+ */
 async function teardownConsumer(consumerId: string): Promise<void> {
   await testPool.query(`DELETE FROM cashback_transactions WHERE user_id = $1`, [consumerId]);
   await testPool.query(`DELETE FROM attribution_sessions WHERE user_id = $1`, [consumerId]);
   await testPool.query(`DELETE FROM pool_balances WHERE user_id = $1`, [consumerId]);
   await testPool.query(`DELETE FROM pool_configs WHERE user_id = $1`, [consumerId]);
   await testPool.query(`DELETE FROM purchase_profiles WHERE user_id = $1`, [consumerId]);
-  await testPool.query(`DELETE FROM audit_log WHERE actor_id = $1`, [consumerId]);
-  await testPool.query(`DELETE FROM users WHERE id = $1`, [consumerId]);
+
+  const auditRes = await testPool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM audit_log WHERE actor_id = $1`,
+    [consumerId],
+  );
+  if (auditRes.rows[0]!.count === '0') {
+    await testPool.query(`DELETE FROM users WHERE id = $1`, [consumerId]);
+  }
 }
 
 /** Teardown campaign, advertiser, NGO */

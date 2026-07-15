@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useSearch, useNavigate } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DollarSign, Shield, Users, Megaphone, TrendingUp, Activity } from 'lucide-react';
 import {
@@ -446,7 +446,9 @@ function AdvertisersTab() {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function AdminDashboardPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('financials');
+  const { tab: activeTab } = useSearch({ from: '/admin' });
+  const navigate = useNavigate();
+  const setActiveTab = (key: Tab) => void navigate({ to: '/admin', search: { tab: key } });
 
   return (
     <AppLayout title="Admin Dashboard">

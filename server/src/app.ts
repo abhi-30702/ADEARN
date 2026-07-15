@@ -17,6 +17,7 @@ import reviewRoutes from './routes/review.routes';
 import webhookRoutes from './routes/webhook.routes';
 import walletRoutes from './routes/wallet.routes';
 import adminRoutes from './routes/admin.routes';
+import charityRoutes from './routes/charity.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -74,6 +75,7 @@ export function createApp(): Application {
   app.use('/api/v1/reviews', reviewRoutes);
   app.use('/api/v1/wallet', walletRoutes);
   app.use('/api/v1/admin', adminRoutes);
+  app.use('/api/v1/charity', charityRoutes);
 
   // Sentry error handler — must come AFTER routes and BEFORE custom error handler
   if (env.SENTRY_DSN) {

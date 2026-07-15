@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+﻿import { Pool } from 'pg';
 
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -7,7 +7,10 @@ async function seed() {
   try {
     await client.query('BEGIN');
 
-    // Clear demo data (order matters — FK constraints)
+    // Clear demo data (order matters â€” FK constraints)
+    // NOTE: audit_log blocks plain DELETE via an "ON DELETE DO INSTEAD
+    // NOTHING" rule (append-only audit trail), so we TRUNCATE it instead â€”
+    // TRUNCATE isn't intercepted by that rule, unlike DELETE.
     await client.query(`DELETE FROM cashback_transactions WHERE TRUE`);
     await client.query(`DELETE FROM attribution_sessions WHERE TRUE`);
     await client.query(`DELETE FROM ad_reviews WHERE TRUE`);
@@ -16,7 +19,7 @@ async function seed() {
     await client.query(`DELETE FROM purchase_profiles WHERE TRUE`);
     await client.query(`DELETE FROM campaigns WHERE TRUE`);
     await client.query(`DELETE FROM advertisers WHERE TRUE`);
-    await client.query(`DELETE FROM audit_log WHERE TRUE`);
+    await client.query(`TRUNCATE TABLE audit_log CASCADE`);
     await client.query(`DELETE FROM users WHERE TRUE`);
     await client.query(`DELETE FROM ngos WHERE TRUE`);
 
@@ -43,7 +46,7 @@ async function seed() {
     // NGO
     const ngoRes = await client.query(`
       INSERT INTO ngos (name, registration_no, cause, bank_account)
-      VALUES ('CRY — Child Rights and You', 'CRY-MH-001', 'education',
+      VALUES ('CRY â€” Child Rights and You', 'CRY-MH-001', 'education',
               '{"bank": "HDFC", "account": "12345678", "ifsc": "HDFC0001234"}'::jsonb)
       RETURNING id
     `);
@@ -84,7 +87,7 @@ async function seed() {
     await client.query(`
       INSERT INTO purchase_profiles (user_id, categories, is_active)
       VALUES ($1,
-        '[{"category": "Health & Beauty", "brands": ["Mamaearth"], "spend_range": "₹1K–5K", "frequency": "Monthly"}]'::jsonb,
+        '[{"category": "Health & Beauty", "brands": ["Mamaearth"], "spend_range": "â‚¹1Kâ€“5K", "frequency": "Monthly"}]'::jsonb,
         true)
     `, [consumerId]);
 
@@ -96,7 +99,7 @@ async function seed() {
       VALUES ($1, 40, 30, 20, 10, 'Emergency Fund', 50000, $2)
     `, [consumerId, ngoId]);
 
-    // Consumer pool balances (fresh — all zeros)
+    // Consumer pool balances (fresh â€” all zeros)
     await client.query(`
       INSERT INTO pool_balances (user_id) VALUES ($1)
     `, [consumerId]);

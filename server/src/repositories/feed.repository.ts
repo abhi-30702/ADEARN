@@ -1,4 +1,5 @@
 import { db } from '../config/db';
+import { env } from '../config/env';
 
 interface MatchedAd {
   id: string;
@@ -28,7 +29,7 @@ export const feedRepository = {
       LEFT JOIN attribution_sessions s ON
         s.campaign_id = c.id
         AND s.user_id = $1
-        AND s.ad_viewed_at > NOW() - INTERVAL '48 hours'
+        AND s.ad_viewed_at > NOW() - make_interval(hours => $2::int)
       WHERE c.status = 'active'
         AND c.starts_at <= NOW()
         AND c.ends_at   >= NOW()
@@ -39,7 +40,7 @@ export const feedRepository = {
       ORDER BY c.cashback_rate DESC, a.quality_score DESC
       LIMIT 20
       `,
-      [userId],
+      [userId, env.AD_RESHOW_WINDOW_HOURS],
     );
     return res.rows;
   },

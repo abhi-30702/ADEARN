@@ -75,10 +75,13 @@ export const reviewRepository = {
     transactionId: string,
     userId: string,
   ): Promise<TransactionRow | null> {
+    // cashback_transactions has no campaign_id — it links to the campaign
+    // through its attribution session.
     const res = await db.query<TransactionRow>(
-      `SELECT ct.id, ct.campaign_id, ct.status, c.advertiser_id
+      `SELECT ct.id, ats.campaign_id, ct.status, c.advertiser_id
          FROM cashback_transactions ct
-         JOIN campaigns c ON c.id = ct.campaign_id
+         JOIN attribution_sessions ats ON ats.id = ct.attribution_id
+         JOIN campaigns c ON c.id = ats.campaign_id
         WHERE ct.id = $1
           AND ct.user_id = $2`,
       [transactionId, userId],

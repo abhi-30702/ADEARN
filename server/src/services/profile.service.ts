@@ -1,5 +1,6 @@
 import { profileRepository } from '../repositories/profile.repository';
 import { AppError } from '../lib/AppError';
+import { env } from '../config/env';
 
 export const profileService = {
   async getProfile(userId: string) {
@@ -25,9 +26,14 @@ export const profileService = {
   async updateProfile(userId: string, categories: unknown[]) {
     const existing = await profileRepository.findActiveByUserId(userId);
 
-    // Enforce one-update-per-30-days rule.
+    // Enforce the profile-update cooldown (default 30 days; configurable via
+    // PROFILE_UPDATE_COOLDOWN_DAYS — set to 0 to disable for demos/testing).
     // First-time creation is always allowed (next_update_at is null).
-    if (existing?.next_update_at && new Date(existing.next_update_at) > new Date()) {
+    if (
+      env.PROFILE_UPDATE_COOLDOWN_DAYS > 0 &&
+      existing?.next_update_at &&
+      new Date(existing.next_update_at) > new Date()
+    ) {
       throw new AppError(
         `Profile can only be updated after ${existing.next_update_at}`,
         422,

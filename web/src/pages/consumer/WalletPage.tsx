@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { AppLayout } from '../../components/AppLayout';
 import { GlassCard, DataTable, StatusBadge } from '../../components/ui';
 import type { TableColumn } from '../../components/ui';
+import { SavingsGoalCard } from '../../components/SavingsGoalCard';
 import { api } from '../../lib/api';
 import { Wallet, TrendingUp } from 'lucide-react';
 
@@ -117,17 +119,30 @@ export function WalletPage() {
         ))}
       </div>
 
-      {/* Transactions */}
+      {/* Savings goal */}
+      <div className="mb-6">
+        <SavingsGoalCard savingsBalance={wallet?.pool_balances?.savings_balance ?? 0} />
+      </div>
+
+      {/* Recent activity (full history lives on the Transactions page) */}
       <GlassCard className="overflow-hidden">
         <div
-          className="px-5 py-4"
+          className="px-5 py-4 flex items-center justify-between"
           style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
         >
-          <h3 className="text-sm font-semibold text-slate-200">Transaction History</h3>
+          <h3 className="text-sm font-semibold text-slate-200">Recent Activity</h3>
+          {transactions.length > 5 && (
+            <Link
+              to="/transactions"
+              className="text-xs font-medium text-teal-300 hover:text-teal-200 transition-colors"
+            >
+              View all →
+            </Link>
+          )}
         </div>
         <DataTable
           columns={TX_COLUMNS}
-          rows={transactions}
+          rows={transactions.slice(0, 5)}
           emptyMessage="No transactions yet"
         />
       </GlassCard>

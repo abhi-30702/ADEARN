@@ -10,10 +10,12 @@ interface PoolBalanceRow {
 
 interface TransactionRow {
   id: string;
+  campaign_id: string | null;
   campaign_name: string;
   cashback_amount: string;
   created_at: string;
   status: string;
+  reviewed: boolean;
 }
 
 export const walletRepository = {
@@ -29,10 +31,14 @@ export const walletRepository = {
   async getTransactions(userId: string): Promise<TransactionRow[]> {
     const res = await db.query<TransactionRow>(
       `SELECT ct.id,
+              ats.campaign_id,
               COALESCE(c.name, 'Unknown Campaign') AS campaign_name,
               ct.cashback_amount,
               ct.created_at,
-              ct.status
+              ct.status,
+              EXISTS (
+                SELECT 1 FROM ad_reviews ar WHERE ar.transaction_id = ct.id
+              ) AS reviewed
        FROM cashback_transactions ct
        LEFT JOIN attribution_sessions ats ON ats.id = ct.attribution_id
        LEFT JOIN campaigns c ON c.id = ats.campaign_id

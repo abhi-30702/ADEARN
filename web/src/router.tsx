@@ -3,6 +3,9 @@ import { OnboardingPage } from './pages/consumer/OnboardingPage';
 import { FeedPage } from './pages/consumer/FeedPage';
 import { LoginPage } from './pages/consumer/LoginPage';
 import { WalletPage } from './pages/consumer/WalletPage';
+import { TransactionsPage } from './pages/consumer/TransactionsPage';
+import { InsightsPage } from './pages/consumer/InsightsPage';
+import { ImpactPage } from './pages/ImpactPage';
 import { AdvertiserDashboardPage } from './pages/advertiser/AdvertiserDashboardPage';
 import { CampaignCreatePage } from './pages/advertiser/CampaignCreatePage';
 import { CampaignStatsPage } from './pages/advertiser/CampaignStatsPage';
@@ -52,6 +55,24 @@ const walletRoute = createRoute({
   component: WalletPage,
 });
 
+const transactionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/transactions',
+  component: TransactionsPage,
+});
+
+const insightsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/insights',
+  component: InsightsPage,
+});
+
+const impactRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/impact',
+  component: ImpactPage,
+});
+
 const advertiserRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/advertiser',
@@ -76,9 +97,18 @@ const analyticsRoute = createRoute({
   component: AnalyticsDashboardPage,
 });
 
+const ADMIN_TABS = ['financials', 'fraud', 'users', 'advertisers'] as const;
+type AdminTab = (typeof ADMIN_TABS)[number];
+
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
+  validateSearch: (search: Record<string, unknown>): { tab: AdminTab } => {
+    const tab = search.tab;
+    return {
+      tab: ADMIN_TABS.includes(tab as AdminTab) ? (tab as AdminTab) : 'financials',
+    };
+  },
   component: AdminDashboardPage,
 });
 
@@ -89,7 +119,8 @@ const auditLogRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  indexRoute, loginRoute, onboardingRoute, feedRoute, walletRoute,
+  indexRoute, loginRoute, onboardingRoute, feedRoute, walletRoute, transactionsRoute,
+  insightsRoute, impactRoute,
   advertiserRoute, campaignCreateRoute, campaignStatsRoute, analyticsRoute,
   adminRoute, auditLogRoute,
 ]);
